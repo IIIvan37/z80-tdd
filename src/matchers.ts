@@ -1,3 +1,5 @@
+// Brings vitest into the build, which leaves out the tests: the augmentation below needs it.
+import type {} from "vitest";
 import type { MemoryRange } from "./program.ts";
 import { hex, type MemoryChange, type Run } from "./run.ts";
 
