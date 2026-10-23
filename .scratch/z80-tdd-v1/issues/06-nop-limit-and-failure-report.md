@@ -12,3 +12,4 @@
 - [ ] A failure report shows the final registers.
 - [ ] Every kind of Run failure that exists at this point, including an opcode without a NOP count, carries the failure report.
 - [ ] A Routine with an infinite loop fails quickly enough not to slow the test suite noticeably.
+- [ ] A Routine stuck on `HALT` counts 1 NOP per step until the limit, and its `HALT` is tested at the public API (ticket 04 could not: the Run never ended). cell80 leaves PC past the `HALT` while halted, so the Run must not look up the byte at PC then.

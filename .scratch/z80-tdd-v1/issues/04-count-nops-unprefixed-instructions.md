@@ -4,11 +4,11 @@
 
 **Blocked by:** 01 (Walking skeleton).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The Run result gives the duration in NOPs without the `CALL`, and with it (5 NOPs more).
-- [ ] Every unprefixed opcode has a NOP count; conditional instructions (`JR cc`, `JP cc`, `CALL cc`, `RET cc`, `DJNZ`) have one count for each outcome.
-- [ ] A test per instruction (or per instruction pattern) injects its bytes, runs it, and compares the count to Madram's value.
-- [ ] `RST` counts 4 NOPs, not the 11 T-states rounded.
-- [ ] The package credits Madram / Overlanders for the timing data, as the source asks.
-- [ ] Executing a prefixed opcode whose count is not in the table yet fails the Run with a clear message, rather than counting zero.
+- [x] The Run result gives the duration in NOPs without the `CALL`, and with it (5 NOPs more).
+- [x] Every unprefixed opcode has a NOP count; conditional instructions (`JR cc`, `JP cc`, `CALL cc`, `RET cc`, `DJNZ`) have one count for each outcome.
+- [x] A test per instruction (or per instruction pattern) injects its bytes, runs it, and compares the count to Madram's value.
+- [x] `RST` counts 4 NOPs, not the 11 T-states rounded.
+- [x] The package credits Madram / Overlanders for the timing data, as the source asks.
+- [x] Executing a prefixed opcode whose count is not in the table yet fails the Run with a clear message, rather than counting zero.

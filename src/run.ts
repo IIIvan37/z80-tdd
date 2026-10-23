@@ -4,6 +4,7 @@ import {
   type Registers,
   WORD_REGISTERS,
 } from "./cpu/index.ts";
+import { CALL_NOPS, nopsOf } from "./nops.ts";
 
 const DEFAULT_SP = 0xc000;
 // The return address pushed for the Routine. The Routine has returned when PC is back here
@@ -45,6 +46,10 @@ export interface RunOptions {
 export interface Run {
   readonly registers: Registers;
   readonly flags: Flags;
+  /** From the Routine's first instruction to its final `RET` included. */
+  readonly nops: number;
+  /** `nops` plus the `CALL` that enters the Routine. */
+  readonly nopsWithCall: number;
 }
 
 /** The 64 KB of memory a Program was loaded into. */
@@ -81,7 +86,13 @@ export function run(
   cpu.setRegisters({ ...options.registers, sp, pc: entry });
   cpu.setRegisters({ f: withFlags(cpu.registers().f, options.flags ?? {}) });
 
-  while (!hasReturned(cpu.registers(), callerSp)) {
+  let nops = 0;
+  for (
+    let before = cpu.registers();
+    !hasReturned(before, callerSp);
+    before = cpu.registers()
+  ) {
+    nops += nopsOf(memory, before);
     cpu.step();
   }
 
@@ -89,6 +100,8 @@ export function run(
   return Object.freeze({
     registers,
     flags: Object.freeze(flagsOf(registers.f)),
+    nops,
+    nopsWithCall: nops + CALL_NOPS,
   });
 }
 

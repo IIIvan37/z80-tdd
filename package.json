@@ -16,7 +16,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CREDITS.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/copy-wasm.ts",
