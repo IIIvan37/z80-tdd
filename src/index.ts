@@ -10,4 +10,4 @@ export {
   loadProgram,
   type Program,
 } from "./program.ts";
-export type { Flags, Run, RunOptions } from "./run.ts";
+export type { Flags, Run, RunOptions, StartRegisters } from "./run.ts";

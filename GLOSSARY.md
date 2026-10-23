@@ -16,6 +16,10 @@ _Avoid_: Call, execution, invocation
 The external program that turns the CPC project's source into machine code and a symbol table; RASM is the first one supported.
 _Avoid_: Compiler, toolchain
 
+**CPU**:
+The emulated Z80 processor that executes a **Run**, with its registers and flags.
+_Avoid_: Processor
+
 **Program**:
 The machine code and symbol table the **Assembler** produces from one source file of the CPC project, loaded at its real addresses before each **Run**.
 _Avoid_: Build, binary, image

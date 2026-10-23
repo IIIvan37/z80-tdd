@@ -24,15 +24,19 @@ module.exports = {
       to: { path: "^src/[^/]+/", pathNot: "^src/[^/]+/index\\.ts$" },
     },
     {
-      name: "test-imports-only-its-interface",
+      name: "test-in-folder-imports-only-index",
       comment:
-        "A test imports only its module's interface: its file, or its folder's index.ts.",
+        "A test inside a module folder imports only that folder's index.ts.",
       severity: "error",
-      from: { path: "^src/(|.+/)([^/]+)\\.test\\.ts$" },
-      to: {
-        path: "^src/",
-        pathNot: ["^src/$1$2\\.ts$", "^src/$1index\\.ts$"],
-      },
+      from: { path: "^src/([^/]+)/[^/]+\\.test\\.ts$" },
+      to: { path: "^src/", pathNot: "^src/$1/index\\.ts$" },
+    },
+    {
+      name: "test-at-top-imports-only-its-module",
+      comment: "A test beside a file module imports only that file.",
+      severity: "error",
+      from: { path: "^src/([^/]+)\\.test\\.ts$" },
+      to: { path: "^src/", pathNot: "^src/$1\\.ts$" },
     },
     {
       name: "no-circular",

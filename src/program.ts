@@ -1,9 +1,9 @@
 import type { Assembler } from "./assembler/index.ts";
-import { type Run, type RunOptions, run } from "./run.ts";
+import { type LoadedMemory, type Run, type RunOptions, run } from "./run.ts";
 
 export interface Program {
   /** The address of `label`; fails if the Program has no such label. */
-  label(label: string): number;
+  address(label: string): number;
   run(label: string, options?: RunOptions): Run;
 }
 
@@ -12,16 +12,22 @@ export interface LoadProgramOptions {
   readonly assembler: Assembler;
 }
 
-/** Assembles `source` and loads it at its real addresses into a 64 KB image. */
+/** Assembles `source` and loads it at its real addresses into 64 KB of memory. */
 export async function loadProgram({
   source,
   assembler,
 }: LoadProgramOptions): Promise<Program> {
   const assembly = await assembler.assemble(source);
-  const image = new Uint8Array(0x10000);
+  const memory = new Uint8Array(0x10000);
+  const occupied = new Uint8Array(0x10000);
   for (const block of assembly.blocks) {
-    image.set(block.bytes, block.address);
+    memory.set(block.bytes, block.address);
+    occupied.fill(1, block.address, block.address + block.bytes.length);
   }
+  const loaded: LoadedMemory = {
+    bytes: memory,
+    occupies: (address) => occupied[address] === 1,
+  };
 
   const addressOf = (label: string): number => {
     const address = assembly.symbols[label];
@@ -32,7 +38,7 @@ export async function loadProgram({
   };
 
   return {
-    label: addressOf,
-    run: (label, options) => run(image, addressOf(label), options),
+    address: addressOf,
+    run: (label, options) => run(loaded, addressOf(label), options),
   };
 }

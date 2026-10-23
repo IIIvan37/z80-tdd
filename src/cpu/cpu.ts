@@ -1,32 +1,42 @@
+// Pairs come first: setting registers in this order lets an 8-bit register override its pair.
+export const WORD_REGISTERS = [
+  "af",
+  "bc",
+  "de",
+  "hl",
+  "afPrime",
+  "bcPrime",
+  "dePrime",
+  "hlPrime",
+  "ix",
+  "iy",
+  "sp",
+  "pc",
+] as const;
+
+export const BYTE_REGISTERS = [
+  "a",
+  "f",
+  "b",
+  "c",
+  "d",
+  "e",
+  "h",
+  "l",
+  "ixh",
+  "ixl",
+  "iyh",
+  "iyl",
+  "i",
+  "r",
+] as const;
+
+export type RegisterName =
+  | (typeof WORD_REGISTERS)[number]
+  | (typeof BYTE_REGISTERS)[number];
+
 /** Every Z80 register a test can set or read. `afPrime`… are the shadow registers AF', BC', DE', HL'. */
-export interface Registers {
-  readonly a: number;
-  readonly f: number;
-  readonly b: number;
-  readonly c: number;
-  readonly d: number;
-  readonly e: number;
-  readonly h: number;
-  readonly l: number;
-  readonly af: number;
-  readonly bc: number;
-  readonly de: number;
-  readonly hl: number;
-  readonly afPrime: number;
-  readonly bcPrime: number;
-  readonly dePrime: number;
-  readonly hlPrime: number;
-  readonly ix: number;
-  readonly iy: number;
-  readonly ixh: number;
-  readonly ixl: number;
-  readonly iyh: number;
-  readonly iyl: number;
-  readonly sp: number;
-  readonly pc: number;
-  readonly i: number;
-  readonly r: number;
-}
+export type Registers = { readonly [name in RegisterName]: number };
 
 export interface Cpu {
   registers(): Registers;
