@@ -7,7 +7,7 @@
 **Status:** done
 
 - [x] The SingleStepTests/z80 cases run against the CPU adapter, through the CPU interface only.
-- [ ] CI runs the suite; it is fetched or cached so a normal test run stays fast.
+- [x] CI runs the suite; it is fetched or cached so a normal test run stays fast.
 - [x] Every failing case is either fixed in the adapter or listed with the reason it does not matter for z80-tdd (for example, a state the tool never exposes).
 - [x] If the core fails on behaviour that matters, the ticket records the decision (replace the core or write our own) in a new ADR, and the rest of the tool is untouched.
 

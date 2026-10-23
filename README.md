@@ -39,9 +39,9 @@ buffer:
 
 ```ts
 import { beforeAll, describe, expect, it } from "vitest";
-import { loadProgram, memoryMatchers, type Program } from "z80-tdd";
+import { loadProgram, runMatchers, type Program } from "z80-tdd";
 
-expect.extend(memoryMatchers);
+expect.extend(runMatchers);
 
 describe("clear_buffer", () => {
   let program: Program;
@@ -57,7 +57,7 @@ describe("clear_buffer", () => {
 
     expect(run.memory("buffer", 16)).toEqual(Array(16).fill(0));
     expect(run).toChangeOnly(program.range("buffer", 16));
-    expect(run.registers.hl).toBe(program.address("buffer") + 16);
+    expect(run).toHaveRegisters({ hl: program.address("buffer") + 16 });
     // ld hl,nn 3 · ld bc,nn 3 · 15 turns of the loop, 12 each · the last turn 11 · ret 3
     expect(run.nops).toBe(200);
   });
@@ -108,7 +108,7 @@ export default defineConfig({
 
 - A test file overrides any setting: `loadProgram({ source: "src/clear.asm" })`.
 - A Run overrides the SP, the NOP limit and the Port mask: `program.run("clear_buffer", { registers: { sp: 0x8000 }, nopLimit: 500 })`.
-- z80-tdd reads the file in the working directory, where Vitest runs. A path to `rasm` that holds a folder is read from there too.
+- z80-tdd reads the nearest `z80-tdd.config.ts` in the folder where Vitest runs or in a folder above it. That folder is the project root: `source`, and a path to `rasm` that holds a folder, start from there.
 - A setting it does not know, or a value it refuses, fails the test and names the setting.
 
 ## Running a Routine
@@ -170,7 +170,7 @@ expect(run.stubCalls).toMatchObject([{ at: "play_sound", registers: { a: 3 } }])
 
 A call to a Stub costs 3 NOPs, the price of a `RET`, on top of the `CALL` the Routine paid; `nops` sets another duration. A Stub cannot set SP or PC, which its return sets. A failure report shows each call to a Stub as a `Stub` line among the last instructions.
 
-Two Matchers check Memory changes: `toChangeOnly(program.range(label, length))` and `toLeaveMemoryUnchanged()`. Install them with `expect.extend(memoryMatchers)`.
+Two Matchers check Memory changes: `toChangeOnly(program.range(label, length))` and `toLeaveMemoryUnchanged()`. A third, `toHaveRegisters({ a: 0x2a, hl: 0xc000 })`, checks the registers it names and prints the ones that differ in CPC hexadecimal. Install them with `expect.extend(runMatchers)`.
 
 ## When a Run fails
 

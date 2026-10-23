@@ -48,6 +48,12 @@ describe("the configuration file", () => {
     await rm(project, { recursive: true, force: true });
   });
 
+  // Runs the rest of the test from a folder below the project root.
+  async function enter(...folders: string[]): Promise<void> {
+    await mkdir(join(project, ...folders), { recursive: true });
+    process.chdir(join(project, ...folders));
+  }
+
   async function configure(settings: string): Promise<void> {
     await writeFile(
       join(project, "z80-tdd.config.ts"),
@@ -233,6 +239,35 @@ export default defineConfig({ ${settings} });
     );
   });
 
+  it("is found from a folder below the project root", async () => {
+    await configure(`assembler: ${ASSEMBLER}, source: "main.asm"`);
+    await enter("src", "screen");
+
+    const program = await loadProgram();
+
+    expect(program.run("set_a").registers.a).toBe(0x2a);
+  });
+
+  it("gives the source file from the project root", async () => {
+    await writeFile(join(project, "main.asm"), RASM_SOURCE);
+    await configure(`source: "main.asm"`);
+    await enter("src");
+
+    const program = await loadProgram();
+
+    expect(program.run("start").registers.a).toBe(7);
+  });
+
+  it("gives a test file's source file from the project root", async () => {
+    await writeFile(join(project, "other.asm"), RASM_SOURCE);
+    await configure(`source: "main.asm"`);
+    await enter("src");
+
+    const program = await loadProgram({ source: "other.asm" });
+
+    expect(program.run("start").registers.a).toBe(7);
+  });
+
   it("names no Assembler, so loadProgram() runs rasm on the PATH", async () => {
     await writeFile(join(project, "main.asm"), RASM_SOURCE);
     await configure(`source: "main.asm"`);
@@ -256,6 +291,7 @@ export default defineConfig({ ${settings} });
     await configure(
       `assembler: rasmAssembler({ path: "tools/rasm" }), source: "main.asm"`,
     );
+    await enter("src");
 
     const program = await loadProgram();
 

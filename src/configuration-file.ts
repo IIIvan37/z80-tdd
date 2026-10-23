@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { type Assembler, rasmAssembler } from "./assembler/index.ts";
 import {
@@ -25,8 +25,11 @@ export interface ConfigurationFile {
   readonly portMask?: number;
 }
 
-/** Each setting a Program needs: a test file's over the configuration file's, over the defaults. */
-type ResolvedSettings = Required<ConfigurationFile>;
+/** Each setting a Program needs, a test file's over the configuration file's, over the defaults, and the project root. */
+type ResolvedSettings = Required<ConfigurationFile> & {
+  /** The folder of the configuration file, or the working directory without one; no setting changes it. */
+  readonly root: string;
+};
 
 interface Setting {
   accepts(value: unknown): boolean;
@@ -60,31 +63,44 @@ export function defineConfig(settings: ConfigurationFile): ConfigurationFile {
   return settings;
 }
 
-/** The settings of the configuration file in the working directory, with a test file's on top. */
+/** The settings of the nearest configuration file at or above the working directory, with a test file's on top. */
 export async function loadSettings(
   overrides: ConfigurationFile,
 ): Promise<ResolvedSettings> {
   check(overrides, "loadProgram()");
+  const { path, root } = findFile();
   const {
     assembler = rasmAssembler(),
     source,
     sp = 0xc000,
     nopLimit = 1_000_000,
     portMask = 0xff00,
-  } = { ...(await loadFile()), ...defined(overrides) };
+  } = {
+    ...(path === undefined ? {} : await loadFile(path)),
+    ...defined(overrides),
+  };
   if (source === undefined) {
     throw new Error(
       `No source file to assemble: set "source" in ${FILE}, or pass it to loadProgram()`,
     );
   }
-  return { assembler, source, sp, nopLimit, portMask };
+  return { assembler, source, root, sp, nopLimit, portMask };
 }
 
-async function loadFile(): Promise<ConfigurationFile> {
-  const path = join(process.cwd(), FILE);
-  if (!existsSync(path)) {
-    return {};
+// Vitest may run from a folder below the project root, as an editor does for one test file.
+function findFile(): { path?: string; root: string } {
+  for (let dir = process.cwd(); ; dir = dirname(dir)) {
+    const path = join(dir, FILE);
+    if (existsSync(path)) {
+      return { path, root: dir };
+    }
+    if (dirname(dir) === dir) {
+      return { root: process.cwd() };
+    }
   }
+}
+
+async function loadFile(path: string): Promise<ConfigurationFile> {
   const module = await import(pathToFileURL(path).href).catch(
     (error: unknown) => {
       throw new Error(

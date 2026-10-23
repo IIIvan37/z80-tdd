@@ -3,10 +3,10 @@ import {
   type Assembly,
   inMemoryAssembler,
   loadProgram,
-  memoryMatchers,
+  runMatchers,
 } from "./index.ts";
 
-expect.extend(memoryMatchers);
+expect.extend(runMatchers);
 
 const RET = 0xc9;
 const LD_A_N = 0x3e;

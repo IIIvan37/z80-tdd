@@ -28,24 +28,24 @@ interface RasmError {
 }
 
 export interface RasmOptions {
-  /** Where the `rasm` binary is, from the working directory; by default, `rasm` on the PATH. */
+  /** Where the `rasm` binary is, from the project root; by default, `rasm` on the PATH. */
   readonly path?: string;
 }
 
 /** An Assembler that runs RASM on a source file. */
 export function rasmAssembler({ path = "rasm" }: RasmOptions = {}): Assembler {
-  // rasm runs in a temporary folder: a path with a folder in it must not
-  // resolve from there, and a bare name stays a PATH lookup.
-  const command = path === basename(path) ? path : resolve(path);
   return {
-    async assemble(source) {
+    async assemble(source, root) {
+      // rasm runs in a temporary folder: a path with a folder in it must not
+      // resolve from there, and a bare name stays a PATH lookup.
+      const command = path === basename(path) ? path : resolve(root, path);
       const dir = await mkdtemp(join(tmpdir(), "z80-tdd-rasm-"));
       try {
         // A source with its own SAVE gets no default binary from rasm, so a
         // wrapper includes it and saves the whole 64 KB.
         await writeFile(
           join(dir, "program.asm"),
-          ` include ${quoted(resolve(source))}\n save 'memory.bin',0,65536\n`,
+          ` include ${quoted(resolve(root, source))}\n save 'memory.bin',0,65536\n`,
         );
         const { stdout } = await execFileAsync(command, ARGS, {
           cwd: dir,
