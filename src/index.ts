@@ -26,4 +26,7 @@ export type {
   Run,
   RunOptions,
   StartRegisters,
+  Stub,
+  StubCall,
+  StubRegisters,
 } from "./run.ts";

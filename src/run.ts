@@ -6,7 +6,7 @@ import {
   type Registers,
   WORD_REGISTERS,
 } from "./cpu/index.ts";
-import { CALL_NOPS, nopsOf } from "./nops.ts";
+import { CALL_NOPS, nopsOf, RET_NOPS } from "./nops.ts";
 
 // How many of the last instructions executed a failure report shows.
 const HISTORY_LENGTH = 16;
@@ -54,7 +54,23 @@ export interface RunOptions {
   readonly ports?: Readonly<Record<number, PortValues>>;
   /** The bits of a port address a Port read matches on; the Program's port mask by default. */
   readonly portMask?: number;
+  /** Code the Routine calls that the test does not run: each returns at once. */
+  readonly stubs?: readonly Stub[];
 }
+
+/** A label or an address where the Run returns to the caller instead of running the code there. */
+export interface Stub {
+  readonly at: LabelOrAddress;
+  /** Set as the Stub returns, as the code at `at` would have left them. */
+  readonly registers?: StubRegisters;
+  /** Applied after `registers`, so they override the matching bits of F. */
+  readonly flags?: Partial<Flags>;
+  /** What a call to the Stub costs, in NOPs, on top of the `CALL`; 3, the cost of a `RET`, by default. */
+  readonly nops?: number;
+}
+
+/** The registers a Stub may set: all but SP and PC, which its return sets. */
+export type StubRegisters = Omit<StartRegisters, "sp">;
 
 /** The values an `IN` from a port returns in order, or a function that computes each. */
 export type PortValues = readonly number[] | PortFunction;
@@ -84,6 +100,8 @@ export interface Run {
   readonly memoryChanges: readonly MemoryChange[];
   /** Each `OUT`, in order, with its full 16-bit port address. */
   readonly portWrites: readonly PortWrite[];
+  /** Each call to a Stub, in order. */
+  readonly stubCalls: readonly StubCall[];
   /** The `length` bytes at a label or an address once the Routine has returned. */
   memory(at: LabelOrAddress, length?: number): readonly number[];
 }
@@ -93,6 +111,13 @@ export interface MemoryChange {
   readonly address: number;
   readonly before: number;
   readonly after: number;
+}
+
+export interface StubCall {
+  /** The `at` of the Stub, as the test declared it. */
+  readonly at: LabelOrAddress;
+  /** The registers as PC reached the Stub, before the Stub sets its own. */
+  readonly registers: Registers;
 }
 
 export interface PortWrite {
@@ -156,6 +181,11 @@ export function run(
   entry: number,
   options: RunOptions = {},
 ): Run {
+  if (options.registers !== undefined && "pc" in options.registers) {
+    throw new Error(
+      "Register pc cannot be set: the Run starts at the entry label",
+    );
+  }
   checkWidths(options.registers ?? {});
   const nopLimit = options.nopLimit ?? loaded.nopLimit;
   if (!isNopLimit(nopLimit)) {
@@ -210,6 +240,20 @@ export function run(
   cpu.setRegisters({ ...options.registers, sp, pc: entry });
   cpu.setRegisters({ f: withFlags(cpu.registers().f, options.flags ?? {}) });
 
+  const declared = options.stubs ?? [];
+  checkStubs(declared);
+  const stubs = new Map<number, Stub>();
+  for (const stub of declared) {
+    const address = toAddress(stub.at);
+    const other = stubs.get(address);
+    if (other !== undefined) {
+      throw new Error(
+        `The Stubs at ${nameOf(other.at)} and ${nameOf(stub.at)} are both at ${hex(address)}`,
+      );
+    }
+    stubs.set(address, stub);
+  }
+  const stubCalls: StubCall[] = [];
   const initial = memory.slice();
   const stack = new Stack(callerSp);
   const history = new History();
@@ -221,8 +265,12 @@ export function run(
     !hasReturned(before, callerSp);
     before = cpu.registers()
   ) {
+    const stub = stubs.get(before.pc);
     const halted = cpu.internals().halted;
-    const cost = nopsOf(memory, before, halted);
+    const cost =
+      stub === undefined
+        ? nopsOf(memory, before, halted)
+        : (stub.nops ?? RET_NOPS);
     if (cost === undefined) {
       throw failure(
         `No NOP count for the instruction ${hex(memory[before.pc] ?? 0, 2)} at ${hex(before.pc)}`,
@@ -237,6 +285,22 @@ export function run(
     }
     nops += cost;
     stack.reach(before.sp);
+    if (stub !== undefined) {
+      stubCalls.push(
+        Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
+      );
+      cpu.setRegisters({
+        ...stub.registers,
+        pc:
+          (memory[before.sp] ?? 0) |
+          ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8),
+        sp: (before.sp + 2) & 0xffff,
+      });
+      cpu.setRegisters({
+        f: withFlags(cpu.registers().f, stub.flags ?? {}),
+      });
+      continue;
+    }
     // Halted, PC is already past the HALT, and the CPU executes no instruction of the Routine.
     if (!halted) {
       history.record(memory, before.pc);
@@ -268,6 +332,7 @@ export function run(
       changes(initial, final).filter(({ address }) => !stack.holds(address)),
     ),
     portWrites: Object.freeze(ports.writes),
+    stubCalls: Object.freeze(stubCalls),
     memory: (at: LabelOrAddress, length = 1) => {
       const address = toAddress(at);
       return Object.freeze(
@@ -522,12 +587,35 @@ function checkPorts(
   }
 }
 
-function checkWidths(registers: StartRegisters): void {
-  if ("pc" in registers) {
-    throw new Error(
-      "Register pc cannot be set: the Run starts at the entry label",
-    );
+/** A label as written, an address in CPC hexadecimal. */
+function nameOf(at: LabelOrAddress): string {
+  return typeof at === "string" ? at : hex(at);
+}
+
+function checkStubs(stubs: readonly Stub[]): void {
+  for (const { at, registers, nops } of stubs) {
+    if (typeof at === "number" && !isAddress(at)) {
+      throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
+    }
+    const name = nameOf(at);
+    for (const register of ["sp", "pc"]) {
+      if (registers !== undefined && register in registers) {
+        throw new Error(
+          `Register ${register} of the Stub at ${name} cannot be set: the Stub's return sets SP and PC`,
+        );
+      }
+    }
+    checkWidths(registers ?? {}, ` of the Stub at ${name}`);
+    if (nops !== undefined && !isNopLimit(nops)) {
+      throw new Error(
+        `The Stub at ${name} cannot cost ${nops} NOPs: it takes ${NOP_LIMIT_TAKES}`,
+      );
+    }
   }
+}
+
+/** Fails on a register value too wide for its register; `of` names who sets it, as " of the Stub at #BB5A". */
+function checkWidths(registers: StartRegisters, of = ""): void {
   for (const [names, max] of [
     [WORD_REGISTERS, 0xffff],
     [BYTE_REGISTERS, 0xff],
@@ -536,7 +624,7 @@ function checkWidths(registers: StartRegisters): void {
       const value = (registers as Partial<Registers>)[name];
       if (value !== undefined && !isWholeIn(value, 0, max)) {
         throw new Error(
-          `Register ${name} cannot hold ${value}: it takes 0 to ${max}`,
+          `Register ${name}${of} cannot hold ${value}: it takes 0 to ${max}`,
         );
       }
     }

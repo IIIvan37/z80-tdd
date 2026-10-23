@@ -18,6 +18,8 @@ interface Conditional {
 type Entry = number | Conditional;
 
 export const CALL_NOPS = 5;
+// What a `RET` costs, and so what a Stub costs unless the test sets its duration.
+export const RET_NOPS = 3;
 // Each step a halted CPU takes: the NOP it executes internally until an interrupt.
 const HALTED_NOPS = 1;
 
