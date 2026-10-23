@@ -161,7 +161,7 @@ export function run(
   checkPorts(supplied, portMask);
   const toAddress = (at: LabelOrAddress) =>
     typeof at === "string" ? loaded.address(at) : at;
-  const stubs = stubsByAddress(options.stubs ?? [], toAddress);
+  const stubs = new Stubs(options.stubs ?? [], toAddress);
   const ports = new SuppliedPorts(supplied, portMask);
   const cpu = createCpu(ports);
   const memory = cpu.memory;
@@ -198,7 +198,6 @@ export function run(
   }
   setState(cpu, { ...options.registers, sp, pc: entry }, options.flags);
 
-  const stubCalls: StubCall[] = [];
   const initial = memory.slice();
   const stack = new Stack(callerSp);
   const history = new History();
@@ -212,11 +211,9 @@ export function run(
   ) {
     const halted = cpu.internals().halted;
     // Halted, the CPU fetches nothing at PC, so it calls no Stub there.
-    const stub = halted ? undefined : stubs.get(before.pc);
+    const stub = halted ? undefined : stubs.at(before.pc);
     const cost =
-      stub === undefined
-        ? nopsOf(memory, before, halted)
-        : (stub.nops ?? RET_NOPS);
+      stub === undefined ? nopsOf(memory, before, halted) : stub.cost;
     if (cost === undefined) {
       throw failure(
         `No NOP count for the instruction ${hex(memory[before.pc] ?? 0, 2)} at ${hex(before.pc)}`,
@@ -232,11 +229,8 @@ export function run(
     nops += cost;
     stack.reach(before.sp);
     if (stub !== undefined) {
-      stubCalls.push(
-        Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
-      );
       history.recordStub(before.pc);
-      returnFromStub(cpu, before, stub);
+      stubs.call(cpu, before, stub);
       continue;
     }
     // Halted, PC is already past the HALT, and the CPU executes no instruction of the Routine.
@@ -270,7 +264,7 @@ export function run(
       changes(initial, final).filter(({ address }) => !stack.holds(address)),
     ),
     portWrites: Object.freeze(ports.writes),
-    stubCalls: Object.freeze(stubCalls),
+    stubCalls: Object.freeze(stubs.calls),
     memory: (at: LabelOrAddress, length = 1) => {
       const address = toAddress(at);
       return Object.freeze(
@@ -410,6 +404,71 @@ class PortRefusal extends Error {
   }
 }
 
+/** A Stub, with what a call to it costs. */
+type CostedStub = Stub & { readonly cost: number };
+
+/** The Stubs of a Run: where PC reaches each, what a call costs, how it returns, and the calls made. */
+class Stubs {
+  readonly calls: StubCall[] = [];
+  private readonly byAddress = new Map<number, CostedStub>();
+
+  /** Fails on a Stub at no address, with registers `checkRegisters` refuses, a cost that is not a NOP count, or at another's address. */
+  constructor(
+    declared: readonly Stub[],
+    toAddress: (at: LabelOrAddress) => number,
+  ) {
+    for (const stub of declared) {
+      const { at, registers, nops } = stub;
+      if (typeof at === "number" && !isAddress(at)) {
+        throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
+      }
+      const name = nameOf(at);
+      checkRegisters(registers ?? {}, {
+        setter: `of the Stub at ${name}`,
+        unsettable: ["sp", "pc"],
+        why: "the Stub's return sets SP and PC",
+      });
+      if (nops !== undefined && !isNopLimit(nops)) {
+        throw new Error(
+          `The Stub at ${name} cannot cost ${nops} NOPs: it takes ${NOP_LIMIT_TAKES}`,
+        );
+      }
+      const address = toAddress(at);
+      const other = this.byAddress.get(address);
+      if (other !== undefined) {
+        throw new Error(
+          `The Stubs at ${nameOf(other.at)} and ${name} are both at ${hex(address)}`,
+        );
+      }
+      this.byAddress.set(address, { ...stub, cost: nops ?? RET_NOPS });
+    }
+  }
+
+  at(pc: number): CostedStub | undefined {
+    return this.byAddress.get(pc);
+  }
+
+  /** Records the call, sets the Stub's registers and flags, and pops the return address as a `RET` would. */
+  call(cpu: Cpu, before: Registers, stub: CostedStub): void {
+    this.calls.push(
+      Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
+    );
+    const { memory } = cpu;
+    const returnAddress =
+      (memory[before.sp] ?? 0) | ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
+    setState(
+      cpu,
+      { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
+      stub.flags,
+    );
+  }
+}
+
+/** A label as written, an address in CPC hexadecimal. */
+function nameOf(at: LabelOrAddress): string {
+  return typeof at === "string" ? at : hex(at);
+}
+
 const REPORTED_REGISTERS: readonly (readonly RegisterName[])[] = [
   ["af", "bc", "de", "hl"],
   ["afPrime", "bcPrime", "dePrime", "hlPrime"],
@@ -519,45 +578,6 @@ function checkPorts(
   }
 }
 
-/** A label as written, an address in CPC hexadecimal. */
-function nameOf(at: LabelOrAddress): string {
-  return typeof at === "string" ? at : hex(at);
-}
-
-/** The Stubs by the address PC reaches them at, once each is checked. */
-function stubsByAddress(
-  stubs: readonly Stub[],
-  toAddress: (at: LabelOrAddress) => number,
-): Map<number, Stub> {
-  const result = new Map<number, Stub>();
-  for (const stub of stubs) {
-    const { at, registers, nops } = stub;
-    if (typeof at === "number" && !isAddress(at)) {
-      throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
-    }
-    const name = nameOf(at);
-    checkRegisters(registers ?? {}, {
-      setter: `of the Stub at ${name}`,
-      unsettable: ["sp", "pc"],
-      why: "the Stub's return sets SP and PC",
-    });
-    if (nops !== undefined && !isNopLimit(nops)) {
-      throw new Error(
-        `The Stub at ${name} cannot cost ${nops} NOPs: it takes ${NOP_LIMIT_TAKES}`,
-      );
-    }
-    const address = toAddress(at);
-    const other = result.get(address);
-    if (other !== undefined) {
-      throw new Error(
-        `The Stubs at ${nameOf(other.at)} and ${name} are both at ${hex(address)}`,
-      );
-    }
-    result.set(address, stub);
-  }
-  return result;
-}
-
 /** Sets `registers`, then the `flags` over the bits of F. */
 function setState(
   cpu: Cpu,
@@ -566,18 +586,6 @@ function setState(
 ): void {
   cpu.setRegisters(registers);
   cpu.setRegisters({ f: withFlags(cpu.registers().f, flags) });
-}
-
-/** Sets the Stub's registers and flags, and pops the return address as a `RET` would. */
-function returnFromStub(cpu: Cpu, before: Registers, stub: Stub): void {
-  const { memory } = cpu;
-  const returnAddress =
-    (memory[before.sp] ?? 0) | ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
-  setState(
-    cpu,
-    { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
-    stub.flags,
-  );
 }
 
 function hasReturned({ pc, sp }: Registers, callerSp: number): boolean {
