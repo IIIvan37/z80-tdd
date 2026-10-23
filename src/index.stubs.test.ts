@@ -239,6 +239,18 @@ describe("the Stubs of a Run", () => {
     );
   });
 
+  it("refuses a register the Stub leaves undefined, naming the Stub", async () => {
+    const program = await loadPlaySound();
+
+    expect(() =>
+      program.run("play_sound", {
+        stubs: [{ at: 0xbb5a, registers: { a: undefined } as never }],
+      }),
+    ).toThrow(
+      "Register A of the Stub at #BB5A cannot be undefined: it takes #00 to #FF",
+    );
+  });
+
   it("refuses SP or PC set by a Stub, which its return sets", async () => {
     const program = await loadPlaySound();
 

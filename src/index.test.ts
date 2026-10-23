@@ -299,6 +299,17 @@ describe("a Run", () => {
     ).toThrow('"HL" is not a register: the registers are a, f, b, c,');
   });
 
+  it("fails on a register left undefined, rather than leave it at zero", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET] }],
+      symbols: { nothing: 0x4000 },
+    });
+
+    expect(() =>
+      program.run("nothing", { registers: { a: undefined } as never }),
+    ).toThrow("Register A cannot be undefined: it takes #00 to #FF");
+  });
+
   it("refuses a PC set by the test, since the Run starts at the entry label", async () => {
     const program = await load({
       blocks: [{ address: 0x4000, bytes: [RET] }],
