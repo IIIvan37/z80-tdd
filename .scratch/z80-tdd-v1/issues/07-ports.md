@@ -4,11 +4,11 @@
 
 **Blocked by:** 06 (NOP limit and failure report).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every `OUT` instruction, including `OUT (n),A`, `OUT (C),r` and the block outputs, adds a Port write with its full 16-bit port address and its value, in order.
-- [ ] A test can give, per port, a sequence of values that `IN` returns in order.
-- [ ] A test can give, per port, a function that computes the value read.
-- [ ] A read from a port the test did not supply fails the Run, naming the port address and the PC, with the failure report.
-- [ ] A read past the end of a port's sequence fails the Run the same way.
-- [ ] A Routine that polls a port until bit 0 is set (as when waiting for VSYNC) passes when the test supplies the right sequence.
+- [x] Every `OUT` instruction, including `OUT (n),A`, `OUT (C),r` and the block outputs, adds a Port write with its full 16-bit port address and its value, in order.
+- [x] A test can give, per port, a sequence of values that `IN` returns in order.
+- [x] A test can give, per port, a function that computes the value read.
+- [x] A read from a port the test did not supply fails the Run, naming the port address and the PC, with the failure report.
+- [x] A read past the end of a port's sequence fails the Run the same way.
+- [x] A Routine that polls a port until bit 0 is set (as when waiting for VSYNC) passes when the test supplies the right sequence.

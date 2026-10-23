@@ -53,3 +53,6 @@ A value the **Routine** sends to an I/O port with `OUT`, recorded so a test can 
 
 **Port read**:
 A value the **Routine** receives from an I/O port with `IN`, supplied by the test.
+
+**Port mask**:
+The bits of a port address a **Port read** matches on, `#FF00` by default as the CPC decodes; see ADR 0007.
