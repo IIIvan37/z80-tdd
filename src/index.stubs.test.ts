@@ -12,6 +12,7 @@ const LD_B_A = 0x47;
 const CALL_NN = 0xcd;
 const JP_NN = 0xc3;
 const HALT = 0x76;
+const JR_N = 0x18;
 const RET = 0xc9;
 
 function load(assembly: Assembly) {
@@ -177,6 +178,27 @@ describe("a Stub", () => {
       });
 
     expect(failure).toThrow(/^The Run reached its NOP limit of 100 NOPs\n/);
+  });
+
+  it("shows its call among the last instructions of a failure report", async () => {
+    const program = await load({
+      // call play_sound / forever: jr forever
+      blocks: [
+        { address: 0x4000, bytes: [CALL_NN, 0x10, 0x40, JR_N, 0xfe] },
+        { address: 0x4010, bytes: [RET] },
+      ],
+      symbols: { game_loop: 0x4000, play_sound: 0x4010 },
+    });
+
+    const failure = () =>
+      program.run("game_loop", {
+        nopLimit: 20,
+        stubs: [{ at: "play_sound" }],
+      });
+
+    expect(failure).toThrow(
+      /\n {2}#4000 +game_loop +CALL #4010\n {2}#4010 +play_sound +Stub\n {2}#4003 +game_loop\+3 +JR #4003\n/,
+    );
   });
 });
 

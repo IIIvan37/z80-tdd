@@ -278,6 +278,7 @@ export function run(
       stubCalls.push(
         Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
       );
+      history.recordStub(before.pc);
       returnFromStub(cpu, before, stub);
       continue;
     }
@@ -473,16 +474,26 @@ const REPORTED_REGISTERS: readonly (readonly [string, keyof Registers])[][] = [
   ],
 ];
 
-/** The last instructions executed, with the bytes they had when they ran. */
+/** The last instructions executed, with the bytes they had when they ran, and the Stubs called among them. */
 class History {
   // A ring buffer allocated once: record() runs on every step of a Run.
   private readonly addresses = new Uint16Array(HISTORY_LENGTH);
   private readonly bytes = new Uint8Array(HISTORY_LENGTH * LONGEST_INSTRUCTION);
+  // 1 where the slot holds a Stub call, which has no bytes to disassemble.
+  private readonly stubbed = new Uint8Array(HISTORY_LENGTH);
   private recorded = 0;
+
+  recordStub(address: number): void {
+    const slot = this.recorded % HISTORY_LENGTH;
+    this.addresses[slot] = address;
+    this.stubbed[slot] = 1;
+    this.recorded++;
+  }
 
   record(memory: Uint8Array, address: number): void {
     const slot = this.recorded % HISTORY_LENGTH;
     this.addresses[slot] = address;
+    this.stubbed[slot] = 0;
     for (let i = 0; i < LONGEST_INSTRUCTION; i++) {
       this.bytes[slot * LONGEST_INSTRUCTION + i] =
         memory[(address + i) & 0xffff] ?? 0;
@@ -503,7 +514,7 @@ class History {
       return {
         address,
         label: loaded.labelNear(address),
-        text: disassemble(address, bytes).text,
+        text: this.stubbed[slot] ? "Stub" : disassemble(address, bytes).text,
       };
     });
     const width = Math.max(0, ...rows.map(({ label }) => label.length));
