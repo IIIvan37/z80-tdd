@@ -24,6 +24,15 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2))
 
+  example:
+    devDependencies:
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2))
+      z80-tdd:
+        specifier: workspace:*
+        version: link:..
+
 packages:
 
   '@biomejs/biome@2.6.2':
