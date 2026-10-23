@@ -521,7 +521,7 @@ class History {
     const width = Math.max(0, ...rows.map(({ label }) => label.length));
     return rows.map(
       ({ address, label, text }) =>
-        `  ${hex(address)}  ${label.padEnd(width)}  ${text}`,
+        `  ${hex(address)}  ${label.padEnd(width)}  ${text}`, // NOSONAR(S6551): text is a string, "Stub" or the mnemonic disassemble returns
     );
   }
 }
