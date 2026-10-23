@@ -1,8 +1,11 @@
 name: CI
 
+# Runs on each merge into main only. A change to Markdown alone (docs, tickets,
+# session reports) cannot break the gate.
 on:
   push:
-  pull_request:
+    branches: [main]
+    paths-ignore: ["**.md"]
 
 jobs:
   gate:
