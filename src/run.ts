@@ -145,18 +145,18 @@ export function run(
     unsettable: ["pc"],
     why: "the Run starts at the entry label",
   });
-  const nopLimit = options.nopLimit ?? loaded.nopLimit;
-  if (!isNopLimit(nopLimit)) {
-    throw new Error(
-      `The NOP limit cannot be ${nopLimit}: it takes ${NOP_LIMIT_TAKES}`,
-    );
-  }
-  const portMask = options.portMask ?? loaded.portMask;
-  if (!isAddress(portMask)) {
-    throw new Error(
-      `The port mask cannot be ${portMask}: it takes ${ADDRESS_TAKES}`,
-    );
-  }
+  const nopLimit = setting(
+    options.nopLimit ?? loaded.nopLimit,
+    isNopLimit,
+    "The NOP limit",
+    NOP_LIMIT_TAKES,
+  );
+  const portMask = setting(
+    options.portMask ?? loaded.portMask,
+    isAddress,
+    "The port mask",
+    ADDRESS_TAKES,
+  );
   const ports = new SuppliedPorts(options.ports ?? {}, portMask);
   const toAddress = (at: LabelOrAddress) =>
     typeof at === "string" ? loaded.address(at) : at;
@@ -545,6 +545,19 @@ function report(
     "Registers:",
     ...lines,
   ].join("\n");
+}
+
+/** `value` if `accepts` takes it; fails otherwise, as "The NOP limit cannot be -1: it takes …". */
+function setting(
+  value: number,
+  accepts: (value: unknown) => boolean,
+  name: string,
+  takes: string,
+): number {
+  if (!accepts(value)) {
+    throw new Error(`${name} cannot be ${value}: it takes ${takes}`);
+  }
+  return value;
 }
 
 /** Executes one step of `cpu`; gives the Port read the test refused during it, if any. */
