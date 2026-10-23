@@ -404,12 +404,11 @@ class PortRefusal extends Error {
   }
 }
 
-/** A Stub, with what a call to it costs. */
 type CostedStub = Stub & { readonly cost: number };
 
 /** The Stubs of a Run: where PC reaches each, what a call costs, how it returns, and the calls made. */
 class Stubs {
-  readonly calls: StubCall[] = [];
+  private readonly made: StubCall[] = [];
   private readonly byAddress = new Map<number, CostedStub>();
 
   /** Fails on a Stub at no address, with registers `checkRegisters` refuses, a cost that is not a NOP count, or at another's address. */
@@ -444,13 +443,17 @@ class Stubs {
     }
   }
 
+  get calls(): readonly StubCall[] {
+    return this.made;
+  }
+
   at(pc: number): CostedStub | undefined {
     return this.byAddress.get(pc);
   }
 
-  /** Records the call, sets the Stub's registers and flags, and pops the return address as a `RET` would. */
+  /** Records the call, then returns as a `RET` would, with the Stub's registers and flags. */
   call(cpu: Cpu, before: Registers, stub: CostedStub): void {
-    this.calls.push(
+    this.made.push(
       Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
     );
     const { memory } = cpu;
