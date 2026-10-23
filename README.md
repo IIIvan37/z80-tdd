@@ -2,7 +2,7 @@
 
 Write the Z80 assembly of an Amstrad CPC project test-first. Each Vitest test runs a Routine of your real project on an emulated Z80, then checks the registers, flags, memory and duration in NOPs it leaves behind.
 
-> **Status:** v1 in progress, not on npm yet. Registers, flags, memory, NOP counts, the NOP limit, ports, RASM and the configuration file work. Stubs and an example project are still to come.
+> **Status:** v1 in progress, not on npm yet. Registers, flags, memory, NOP counts, the NOP limit, ports, Stubs, RASM and the configuration file work. An example project is still to come.
 
 ## What a test looks like
 
@@ -100,6 +100,7 @@ export default defineConfig({
 | `nopLimit` | The longest the Run may last, in NOPs |
 | `ports` | What each `IN` returns, by port: values in order, or a function (see below) |
 | `portMask` | The bits of a port address a Port read matches on |
+| `stubs` | Code the Routine calls that the Run does not execute, at a label or an address (see below) |
 
 | Result | What it holds |
 |---|---|
@@ -109,6 +110,7 @@ export default defineConfig({
 | `memoryChanges` | Each byte the Run changed, as `{ address, before, after }`, except the stack the Routine used |
 | `memory(at, length)` | The bytes at a label or an address once the Routine has returned |
 | `portWrites` | Each `OUT`, in order, as `{ address, value }` with the full 16-bit port address |
+| `stubCalls` | Each call to a Stub, in order, as `{ at, registers }`: the Stub's `at` and the registers as PC reached it |
 
 ### Ports
 
@@ -125,6 +127,23 @@ program.run("read_keys", {
 ```
 
 A read from a port the test did not supply, or past the end of its values, fails the Run with the port address and the PC. Set `portMask: 0xffff` to match the full address, as the FDC ports `#FB7E` and `#FB7F` need.
+
+### Stubs
+
+A Stub stands in for code the test does not run: another routine of the project, or the firmware, whose ROM is not loaded. When PC reaches a Stub, the Run records the call, sets the Stub's `registers` then its `flags`, and returns to the caller as a `RET` would.
+
+```ts
+const run = program.run("game_loop", {
+  stubs: [
+    { at: "play_sound" },
+    { at: "read_keys", registers: { a: 0xfb }, nops: 120 },
+    { at: 0xbb5a },                                  // TXT OUTPUT, in the firmware
+  ],
+});
+expect(run.stubCalls).toMatchObject([{ at: "play_sound", registers: { a: 3 } }]);
+```
+
+A call to a Stub costs 3 NOPs, the price of a `RET`, on top of the `CALL` the Routine paid; `nops` sets another duration. A Stub cannot set SP or PC, which its return sets.
 
 Two Matchers check Memory changes: `toChangeOnly(program.range(label, length))` and `toLeaveMemoryUnchanged()`. Install them with `expect.extend(memoryMatchers)`.
 
