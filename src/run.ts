@@ -145,60 +145,32 @@ export function run(
     unsettable: ["pc"],
     why: "the Run starts at the entry label",
   });
-  const nopLimit = options.nopLimit ?? loaded.nopLimit;
-  if (!isNopLimit(nopLimit)) {
-    throw new Error(
-      `The NOP limit cannot be ${nopLimit}: it takes ${NOP_LIMIT_TAKES}`,
-    );
-  }
-  const portMask = options.portMask ?? loaded.portMask;
-  if (!isAddress(portMask)) {
-    throw new Error(
-      `The port mask cannot be ${portMask}: it takes ${ADDRESS_TAKES}`,
-    );
-  }
-  const supplied = options.ports ?? {};
-  checkPorts(supplied, portMask);
+  const nopLimit = setting(
+    options.nopLimit ?? loaded.nopLimit,
+    isNopLimit,
+    "The NOP limit",
+    NOP_LIMIT_TAKES,
+  );
+  const portMask = setting(
+    options.portMask ?? loaded.portMask,
+    isAddress,
+    "The port mask",
+    ADDRESS_TAKES,
+  );
+  const ports = new SuppliedPorts(options.ports ?? {}, portMask);
   const toAddress = (at: LabelOrAddress) =>
     typeof at === "string" ? loaded.address(at) : at;
-  const stubs = stubsByAddress(options.stubs ?? [], toAddress);
-  const ports = new SuppliedPorts(supplied, portMask);
+  const stubs = new Stubs(options.stubs ?? [], toAddress);
   const cpu = createCpu(ports);
   const memory = cpu.memory;
   memory.set(loaded.bytes);
 
   const callerSp = options.registers?.sp ?? loaded.sp;
   const sp = (callerSp - 2) & 0xffff;
-  const returnAddressAt = [sp, (sp + 1) & 0xffff] as const;
-  for (const address of returnAddressAt) {
-    if (loaded.occupies(address)) {
-      throw new Error(
-        `The return address pushed at ${hex(address)} would overwrite the Program; set another SP`,
-      );
-    }
-  }
-  memory[returnAddressAt[0]] = SENTINEL & 0xff;
-  memory[returnAddressAt[1]] = SENTINEL >> 8;
-  for (const { at, bytes } of options.memory ?? []) {
-    const start = toAddress(at);
-    for (const [i, byte] of bytes.entries()) {
-      const address = (start + i) & 0xffff;
-      if (!isByte(byte)) {
-        throw new Error(
-          `The byte at ${hex(address)} cannot be ${byte}: it takes ${BYTE_TAKES}`,
-        );
-      }
-      if (returnAddressAt.includes(address)) {
-        throw new Error(
-          `The bytes written at ${hex(start)} would overwrite the return address pushed at ${hex(sp)}; set another SP`,
-        );
-      }
-      memory[address] = byte;
-    }
-  }
+  const returnAddressAt = pushSentinel(memory, loaded, sp);
+  writeTestBytes(memory, options.memory ?? [], toAddress, returnAddressAt);
   setState(cpu, { ...options.registers, sp, pc: entry }, options.flags);
 
-  const stubCalls: StubCall[] = [];
   const initial = memory.slice();
   const stack = new Stack(callerSp);
   const history = new History();
@@ -212,11 +184,9 @@ export function run(
   ) {
     const halted = cpu.internals().halted;
     // Halted, the CPU fetches nothing at PC, so it calls no Stub there.
-    const stub = halted ? undefined : stubs.get(before.pc);
+    const stub = halted ? undefined : stubs.at(before.pc);
     const cost =
-      stub === undefined
-        ? nopsOf(memory, before, halted)
-        : (stub.nops ?? RET_NOPS);
+      stub === undefined ? nopsOf(memory, before, halted) : stub.cost;
     if (cost === undefined) {
       throw failure(
         `No NOP count for the instruction ${hex(memory[before.pc] ?? 0, 2)} at ${hex(before.pc)}`,
@@ -232,24 +202,17 @@ export function run(
     nops += cost;
     stack.reach(before.sp);
     if (stub !== undefined) {
-      stubCalls.push(
-        Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
-      );
       history.recordStub(before.pc);
-      returnFromStub(cpu, before, stub);
+      stubs.call(cpu, before, stub);
       continue;
     }
     // Halted, PC is already past the HALT, and the CPU executes no instruction of the Routine.
     if (!halted) {
       history.record(memory, before.pc);
     }
-    try {
-      cpu.step();
-    } catch (error) {
-      if (!(error instanceof PortRefusal)) {
-        throw error;
-      }
-      const { address, key, why, cause } = error;
+    const refusal = step(cpu);
+    if (refusal !== undefined) {
+      const { address, key, why, cause } = refusal;
       throw failure(
         `The Routine read port ${hex(address)} (key ${hex(key)}) at ${hex(before.pc)}, ${why}`,
         before,
@@ -270,7 +233,7 @@ export function run(
       changes(initial, final).filter(({ address }) => !stack.holds(address)),
     ),
     portWrites: Object.freeze(ports.writes),
-    stubCalls: Object.freeze(stubCalls),
+    stubCalls: Object.freeze(stubs.calls),
     memory: (at: LabelOrAddress, length = 1) => {
       const address = toAddress(at);
       return Object.freeze(
@@ -332,10 +295,36 @@ class SuppliedPorts implements Ports {
   // How many values of each key's sequence the Routine has read.
   private readonly counts = new Map<number, number>();
 
+  /** Fails on a port that is not an address or has bits outside `mask`, or on values that are not bytes or a function. */
   constructor(
     private readonly supplied: Readonly<Record<number, PortValues>>,
     private readonly mask: number,
-  ) {}
+  ) {
+    for (const [key, values] of Object.entries(supplied)) {
+      const port = Number(key);
+      if (!isAddress(port)) {
+        throw new Error(`A port cannot be ${key}: it takes ${ADDRESS_TAKES}`);
+      }
+      if ((port & mask) !== port) {
+        throw new Error(
+          `The port ${hex(port)} has bits outside the port mask ${hex(mask)}, so no Port read would match it`,
+        );
+      }
+      if (Array.isArray(values)) {
+        for (const value of values) {
+          if (!isByte(value)) {
+            throw new Error(
+              `A value read at port ${hex(port)} cannot be ${value}: it takes ${BYTE_TAKES}`,
+            );
+          }
+        }
+      } else if (typeof values !== "function") {
+        throw new TypeError(
+          `The port ${hex(port)} cannot be given ${JSON.stringify(values)}: it takes a list of values or a function`,
+        );
+      }
+    }
+  }
 
   read(address: number): number {
     const key = address & this.mask;
@@ -410,6 +399,75 @@ class PortRefusal extends Error {
   }
 }
 
+type CostedStub = Omit<Stub, "nops"> & { readonly cost: number };
+
+/** The Stubs of a Run: where PC reaches each, what a call costs, how it returns, and the calls made. */
+class Stubs {
+  private readonly made: StubCall[] = [];
+  private readonly byAddress = new Map<number, CostedStub>();
+
+  /** Fails on a Stub at no address, with registers `checkRegisters` refuses, a cost that is not a NOP count, or at another's address. */
+  constructor(
+    declared: readonly Stub[],
+    toAddress: (at: LabelOrAddress) => number,
+  ) {
+    for (const stub of declared) {
+      const { nops, ...placed } = stub;
+      const { at, registers } = placed;
+      if (typeof at === "number" && !isAddress(at)) {
+        throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
+      }
+      const name = nameOf(at);
+      checkRegisters(registers ?? {}, {
+        setter: `of the Stub at ${name}`,
+        unsettable: ["sp", "pc"],
+        why: "the Stub's return sets SP and PC",
+      });
+      if (nops !== undefined && !isNopLimit(nops)) {
+        throw new Error(
+          `The Stub at ${name} cannot cost ${nops} NOPs: it takes ${NOP_LIMIT_TAKES}`,
+        );
+      }
+      const address = toAddress(at);
+      const other = this.byAddress.get(address);
+      if (other !== undefined) {
+        throw new Error(
+          `The Stubs at ${nameOf(other.at)} and ${name} are both at ${hex(address)}`,
+        );
+      }
+      this.byAddress.set(address, { ...placed, cost: nops ?? RET_NOPS });
+    }
+  }
+
+  get calls(): readonly StubCall[] {
+    return this.made;
+  }
+
+  at(pc: number): CostedStub | undefined {
+    return this.byAddress.get(pc);
+  }
+
+  /** Records the call, then returns as a `RET` would, with the Stub's registers and flags. */
+  call(cpu: Cpu, before: Registers, stub: CostedStub): void {
+    this.made.push(
+      Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
+    );
+    const { memory } = cpu;
+    const returnAddress =
+      (memory[before.sp] ?? 0) | ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
+    setState(
+      cpu,
+      { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
+      stub.flags,
+    );
+  }
+}
+
+/** A label as written, an address in CPC hexadecimal. */
+function nameOf(at: LabelOrAddress): string {
+  return typeof at === "string" ? at : hex(at);
+}
+
 const REPORTED_REGISTERS: readonly (readonly RegisterName[])[] = [
   ["af", "bc", "de", "hl"],
   ["afPrime", "bcPrime", "dePrime", "hlPrime"],
@@ -463,7 +521,7 @@ class History {
     const width = Math.max(0, ...rows.map(({ label }) => label.length));
     return rows.map(
       ({ address, label, text }) =>
-        `  ${hex(address)}  ${label.padEnd(width)}  ${text}`,
+        `  ${hex(address)}  ${label.padEnd(width)}  ${text}`, // NOSONAR(S6551): text is a string, "Stub" or the mnemonic disassemble returns
     );
   }
 }
@@ -489,73 +547,75 @@ function report(
   ].join("\n");
 }
 
-function checkPorts(
-  ports: Readonly<Record<number, PortValues>>,
-  portMask: number,
-): void {
-  for (const [key, values] of Object.entries(ports)) {
-    const port = Number(key);
-    if (!isAddress(port)) {
-      throw new Error(`A port cannot be ${key}: it takes ${ADDRESS_TAKES}`);
+/** `value` if `accepts` takes it; fails otherwise, as "The NOP limit cannot be -1: it takes …". */
+function setting(
+  value: number,
+  accepts: (value: unknown) => boolean,
+  name: string,
+  takes: string,
+): number {
+  if (!accepts(value)) {
+    throw new Error(`${name} cannot be ${value}: it takes ${takes}`);
+  }
+  return value;
+}
+
+/** Executes one step of `cpu`; gives the Port read the test refused during it, if any. */
+function step(cpu: Cpu): PortRefusal | undefined {
+  try {
+    cpu.step();
+    return undefined;
+  } catch (error) {
+    if (error instanceof PortRefusal) {
+      return error;
     }
-    if ((port & portMask) !== port) {
-      throw new Error(
-        `The port ${hex(port)} has bits outside the port mask ${hex(portMask)}, so no Port read would match it`,
-      );
-    }
-    if (Array.isArray(values)) {
-      for (const value of values) {
-        if (!isByte(value)) {
-          throw new Error(
-            `A value read at port ${hex(port)} cannot be ${value}: it takes ${BYTE_TAKES}`,
-          );
-        }
-      }
-    } else if (typeof values !== "function") {
-      throw new Error(
-        `The port ${hex(port)} cannot be given ${JSON.stringify(values)}: it takes a list of values or a function`,
-      );
-    }
+    throw error;
   }
 }
 
-/** A label as written, an address in CPC hexadecimal. */
-function nameOf(at: LabelOrAddress): string {
-  return typeof at === "string" ? at : hex(at);
+/** Writes the sentinel return address at `sp` and gives where; fails if it would overwrite the Program. */
+function pushSentinel(
+  memory: Uint8Array,
+  loaded: LoadedProgram,
+  sp: number,
+): readonly [number, number] {
+  const returnAddressAt = [sp, (sp + 1) & 0xffff] as const;
+  for (const address of returnAddressAt) {
+    if (loaded.occupies(address)) {
+      throw new Error(
+        `The return address pushed at ${hex(address)} would overwrite the Program; set another SP`,
+      );
+    }
+  }
+  memory[returnAddressAt[0]] = SENTINEL & 0xff;
+  memory[returnAddressAt[1]] = SENTINEL >> 8;
+  return returnAddressAt;
 }
 
-/** The Stubs by the address PC reaches them at, once each is checked. */
-function stubsByAddress(
-  stubs: readonly Stub[],
+/** Writes the test's bytes before the Run; fails on a value that is not a byte, or on the return address. */
+function writeTestBytes(
+  memory: Uint8Array,
+  writes: readonly MemoryWrite[],
   toAddress: (at: LabelOrAddress) => number,
-): Map<number, Stub> {
-  const result = new Map<number, Stub>();
-  for (const stub of stubs) {
-    const { at, registers, nops } = stub;
-    if (typeof at === "number" && !isAddress(at)) {
-      throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
+  returnAddressAt: readonly [number, number],
+): void {
+  for (const { at, bytes } of writes) {
+    const start = toAddress(at);
+    for (const [i, byte] of bytes.entries()) {
+      const address = (start + i) & 0xffff;
+      if (!isByte(byte)) {
+        throw new Error(
+          `The byte at ${hex(address)} cannot be ${byte}: it takes ${BYTE_TAKES}`,
+        );
+      }
+      if (returnAddressAt.includes(address)) {
+        throw new Error(
+          `The bytes written at ${hex(start)} would overwrite the return address pushed at ${hex(returnAddressAt[0])}; set another SP`,
+        );
+      }
+      memory[address] = byte;
     }
-    const name = nameOf(at);
-    checkRegisters(registers ?? {}, {
-      setter: `of the Stub at ${name}`,
-      unsettable: ["sp", "pc"],
-      why: "the Stub's return sets SP and PC",
-    });
-    if (nops !== undefined && !isNopLimit(nops)) {
-      throw new Error(
-        `The Stub at ${name} cannot cost ${nops} NOPs: it takes ${NOP_LIMIT_TAKES}`,
-      );
-    }
-    const address = toAddress(at);
-    const other = result.get(address);
-    if (other !== undefined) {
-      throw new Error(
-        `The Stubs at ${nameOf(other.at)} and ${name} are both at ${hex(address)}`,
-      );
-    }
-    result.set(address, stub);
   }
-  return result;
 }
 
 /** Sets `registers`, then the `flags` over the bits of F. */
@@ -566,18 +626,6 @@ function setState(
 ): void {
   cpu.setRegisters(registers);
   cpu.setRegisters({ f: withFlags(cpu.registers().f, flags) });
-}
-
-/** Sets the Stub's registers and flags, and pops the return address as a `RET` would. */
-function returnFromStub(cpu: Cpu, before: Registers, stub: Stub): void {
-  const { memory } = cpu;
-  const returnAddress =
-    (memory[before.sp] ?? 0) | ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
-  setState(
-    cpu,
-    { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
-    stub.flags,
-  );
 }
 
 function hasReturned({ pc, sp }: Registers, callerSp: number): boolean {
