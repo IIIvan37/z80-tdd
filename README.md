@@ -2,14 +2,14 @@
 
 Write the Z80 assembly of an Amstrad CPC project test-first. Each Vitest test runs a Routine of your real project on an emulated Z80, then checks the registers, flags, memory and duration in NOPs it leaves behind.
 
-> **Status:** v1 in progress, not on npm yet. Registers, flags, memory, NOP counts, the NOP limit, ports, Stubs, RASM and the configuration file work. An example project is still to come.
+> **Status:** v1 in progress, not on npm yet. Registers, flags, memory, NOP counts, the NOP limit, ports, Stubs, RASM and the configuration file work. [example/](example/) is a small CPC project tested with each of them.
 
 ## What a test looks like
 
-`src/clear.asm`, assembled by RASM:
+From [example/](example/). `src/clear.asm`, included by the `src/main.asm` that RASM assembles:
 
 ```z80
- org #4000
+; Fills the 16 bytes of buffer with zeros.
 clear_buffer:
  ld hl,buffer
  ld bc,16
@@ -21,6 +21,7 @@ clear_buffer:
  or c
  jr nz,.loop
  ret
+
 buffer:
  defs 16
 ```
@@ -37,7 +38,7 @@ describe("clear_buffer", () => {
   let program: Program;
 
   beforeAll(async () => {
-    program = await loadProgram({ source: "src/clear.asm" });
+    program = await loadProgram(); // assembles the source of z80-tdd.config.ts
   });
 
   it("fills the buffer with zeros, and nothing else", () => {
@@ -64,6 +65,20 @@ z80-tdd needs Node.js 24 or later and Vitest.
    ```
 
 2. Install RASM, the Assembler z80-tdd supports. Download it from [the RASM releases](https://github.com/EdouardBERGE/rasm/releases), then put `rasm` on the PATH. z80-tdd is tested with RASM v3.3.1.
+
+3. Write `z80-tdd.config.ts` at the root of the CPC project, with at least the source file to assemble (see below):
+
+   ```ts
+   import { defineConfig } from "z80-tdd";
+
+   export default defineConfig({ source: "src/main.asm" });
+   ```
+
+4. Write a first test, such as `src/clear.test.ts` above, then run Vitest from the root of the project:
+
+   ```sh
+   pnpm vitest run
+   ```
 
 ## The configuration file
 
@@ -149,25 +164,38 @@ Two Matchers check Memory changes: `toChangeOnly(program.range(label, length))` 
 
 ## When a Run fails
 
-A Run that lasts longer than its NOP limit, or reads a port the test did not supply, fails the test with the last instructions executed and the registers. Here, `clear_buffer` without its `dec bc`:
+A Run that lasts longer than its NOP limit, or reads a port the test did not supply, fails the test with the last instructions executed and the registers. Here, `clear_buffer` without its `dec bc`, from [example/src/failure-report.test.ts](example/src/failure-report.test.ts):
 
 ```text
 The Run reached its NOP limit of 500 NOPs
 
 Last 16 instructions executed:
-  #4006  CLEAR_BUFFER.LOOP    LD (HL),#00
-  #4008  CLEAR_BUFFER.LOOP+2  INC HL
-  #4009  CLEAR_BUFFER.LOOP+3  LD A,B
-  #400A  CLEAR_BUFFER.LOOP+4  OR C
-  #400B  CLEAR_BUFFER.LOOP+5  JR NZ,#4006
+  #404C  CLEAR_BUFFER_BUGGY.LOOP    LD (HL),#00
+  #404E  CLEAR_BUFFER_BUGGY.LOOP+2  INC HL
+  #404F  CLEAR_BUFFER_BUGGY.LOOP+3  LD A,B
+  #4050  CLEAR_BUFFER_BUGGY.LOOP+4  OR C
+  #4051  CLEAR_BUFFER_BUGGY.LOOP+5  JR NZ,#404C
   ...
 
 Registers:
-  AF #1000  BC #0010  DE #0000  HL #403F
+  AF #1000  BC #0010  DE #0000  HL #4040
   AF' #0000  BC' #0000  DE' #0000  HL' #0000
-  IX #0000  IY #0000  SP #BFFE  PC #4008
+  IX #0000  IY #0000  SP #BFFE  PC #404E
   I #00  R #78
 ```
+
+## The example project
+
+[example/](example/) is a CPC project with its own `z80-tdd.config.ts`. Its tests assemble the Program with the real RASM and run on z80-tdd as built for npm.
+
+| Routine | What its test checks |
+|---|---|
+| `clear_buffer` | Registers, Memory changes, NOPs |
+| `wait_vsync` | Port reads from PPI port B, NOPs of a conditional jump |
+| `set_border` | Port writes to the Gate Array, no Memory change |
+| `print_string` | A Stub at the firmware's `TXT OUTPUT` (`#BB5A`) and its calls |
+| `next_frame` | A Stub at the label `wait_vsync`, with its own duration |
+| `clear_buffer_buggy` | The failure report above, as an inline snapshot |
 
 ## How NOPs are counted
 
@@ -177,15 +205,15 @@ A NOP is the CPC unit of time: one microsecond. The CPC stretches each memory ac
 
 ```sh
 pnpm install
-pnpm gate        # typecheck, Biome, dependency-cruiser, Vitest
+pnpm gate        # typecheck, Biome, dependency-cruiser, Vitest, then build and test example/
 pnpm test:core   # the Z80 core against SingleStepTests, 1.6 million cases
 pnpm build:wasm  # rebuilds src/cpu/cell80.wasm; needs the Rust toolchain of wasm/rust-toolchain.toml
 ```
 
-The RASM contract tests need `rasm` on the PATH. The vocabulary is in [GLOSSARY.md](GLOSSARY.md), the decisions in [docs/adr/](docs/adr/), the modules in [docs/MODULES.md](docs/MODULES.md).
+The RASM contract tests and the example project need `rasm` on the PATH. The vocabulary is in [GLOSSARY.md](GLOSSARY.md), the decisions in [docs/adr/](docs/adr/), the modules in [docs/MODULES.md](docs/MODULES.md).
 
 ## Credits and licence
 
 - The NOP count of every instruction comes from "Perfectly accurate Z80 flags and CPC timing" by Madram / Overlanders: see [CREDITS.md](CREDITS.md).
 - The Z80 core is [cell80-z80](https://github.com/chrishayuk/cell80), MIT or Apache-2.0, compiled to WebAssembly: see [wasm/vendor/cell80-z80/](wasm/vendor/cell80-z80/).
-- z80-tdd is under the MIT licence.
+- z80-tdd is under the MIT licence: see [LICENSE](LICENSE).

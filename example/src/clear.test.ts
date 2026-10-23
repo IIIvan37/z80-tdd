@@ -7,7 +7,7 @@ describe("clear_buffer", () => {
   let program: Program;
 
   beforeAll(async () => {
-    program = await loadProgram();
+    program = await loadProgram(); // assembles the source of z80-tdd.config.ts
   });
 
   it("fills the buffer with zeros, and nothing else", () => {
