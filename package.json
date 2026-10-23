@@ -1,0 +1,41 @@
+{
+  "name": "z80-tdd",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Test Z80 routines of Amstrad CPC projects, test-first",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@10.34.5",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "biome check .",
+    "check:fix": "biome check . --write",
+    "depcruise": "depcruise src",
+    "gate": "pnpm typecheck && pnpm check && pnpm depcruise && pnpm test"
+  },
+  "dependencies": {
+    "z80-emulator": "2.3.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.2",
+    "@types/node": "^24.19.2",
+    "dependency-cruiser": "^18.7.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  }
+}
