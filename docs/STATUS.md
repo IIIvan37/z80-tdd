@@ -5,16 +5,17 @@
 
 ## Où on en est
 
-Les tickets 01 à 10 sont dans `main` du dépôt privé `IIIvan37/z80-tdd`, livrés par la PR #1 avec un passage de `simplify` et un README.
-La CI GitHub (`pnpm gate`, puis le job `core` : cell80.wasm recompilé et comparé) ne tourne qu'au merge dans `main`, hors Markdown seul.
-Avant une PR, `pnpm gate` local est le seul contrôle.
-Gate local vert, 1 961 tests. Le cœur Z80 reste cell80-z80 en WebAssembly (ADR 0004).
+Les tickets 01 à 06, 09 et 10 sont dans `main` du dépôt privé `IIIvan37/z80-tdd` (PR #1). Le ticket 07 (Ports) est fini
+sur la branche `feat/ticket-07-ports`, revue et `simplify` faits, pas encore poussée : Port writes, Port reads fournies
+par séquence ou par fonction, Port mask `#FF00` par défaut (ADR 0007).
+La CI GitHub ne tourne qu'au merge dans `main`, hors Markdown seul ; avant une PR, `pnpm gate` local est le seul contrôle.
+Gate local vert, 1 986 tests. Le cœur Z80 reste cell80-z80 en WebAssembly (ADR 0004).
 Modules : [docs/MODULES.md](MODULES.md), règles : [CODING_STANDARDS.md](../CODING_STANDARDS.md),
 spec : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md).
 
 ## Prochaine action
 
-Ticket 07 (Ports), sur une branche partie de `main`.
+Pousser `feat/ticket-07-ports` et ouvrir sa PR vers `main`, après accord de l'utilisateur (compte IIIvan37).
 
 ## Questions ouvertes
 
@@ -25,9 +26,9 @@ Ticket 07 (Ports), sur une branche partie de `main`.
 
 ## Tickets
 
-- Livrés : 01, 02, 03, 04, 05, 06, 09, 10.
-- Démarrables : 07, 08 ; le README du ticket 11 existe déjà, le reste du 11 attend 07 et 08.
-- Prochain : 07.
+- Livrés : 01, 02, 03, 04, 05, 06, 07, 09, 10 (07 sur sa branche, PR à ouvrir).
+- Démarrables : 08 ; le README du ticket 11 existe déjà, le reste du 11 attend 08.
+- Prochain : 08 (Stubs), une fois la PR du 07 fusionnée.
 
 ## Historique
 
@@ -42,3 +43,4 @@ Ticket 07 (Ports), sur une branche partie de `main`.
 - 2026-10-23 · **ticket 10** : fichier de configuration, réglages contrôlés par une table, chemin relatif de `rasm` corrigé, revue corrigée.
 - 2026-10-23 · **première PR** : dépôt distant, `simplify` sur tout le code (*ring buffer*, `isWholeIn`), README, CI verte, PR #1.
 - 2026-10-23 · **CI au merge** : CI au seul merge dans `main`, sans les changements Markdown, PR #3.
+- 2026-10-23 · **ticket 07** : Port writes, Port reads par séquence ou fonction, Port mask `#FF00` (ADR 0007), revue et `simplify` faits.
