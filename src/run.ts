@@ -404,7 +404,7 @@ class PortRefusal extends Error {
   }
 }
 
-type CostedStub = Stub & { readonly cost: number };
+type CostedStub = Omit<Stub, "nops"> & { readonly cost: number };
 
 /** The Stubs of a Run: where PC reaches each, what a call costs, how it returns, and the calls made. */
 class Stubs {
@@ -417,7 +417,8 @@ class Stubs {
     toAddress: (at: LabelOrAddress) => number,
   ) {
     for (const stub of declared) {
-      const { at, registers, nops } = stub;
+      const { nops, ...placed } = stub;
+      const { at, registers } = placed;
       if (typeof at === "number" && !isAddress(at)) {
         throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
       }
@@ -439,7 +440,7 @@ class Stubs {
           `The Stubs at ${nameOf(other.at)} and ${name} are both at ${hex(address)}`,
         );
       }
-      this.byAddress.set(address, { ...stub, cost: nops ?? RET_NOPS });
+      this.byAddress.set(address, { ...placed, cost: nops ?? RET_NOPS });
     }
   }
 
