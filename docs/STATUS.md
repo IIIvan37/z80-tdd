@@ -5,9 +5,8 @@
 
 ## Où on en est
 
-Les tickets 01 à 06, 09 et 10 sont dans `main` du dépôt privé `IIIvan37/z80-tdd` (PR #1). Le ticket 07 (Ports) est fini
-sur la branche `feat/ticket-07-ports`, revue et `simplify` faits, pas encore poussée : Port writes, Port reads fournies
-par séquence ou par fonction, Port mask `#FF00` par défaut (ADR 0007).
+Les tickets 01 à 06, 09 et 10 sont livrés par la PR #1 du dépôt privé `IIIvan37/z80-tdd`. Le ticket 07 (Ports) est livré
+par la PR #4 : Port writes, Port reads fournies par séquence ou par fonction, Port mask `#FF00` par défaut (ADR 0007).
 La CI GitHub ne tourne qu'au merge dans `main`, hors Markdown seul ; avant une PR, `pnpm gate` local est le seul contrôle.
 Gate local vert, 1 986 tests. Le cœur Z80 reste cell80-z80 en WebAssembly (ADR 0004).
 Modules : [docs/MODULES.md](MODULES.md), règles : [CODING_STANDARDS.md](../CODING_STANDARDS.md),
@@ -15,7 +14,7 @@ spec : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md).
 
 ## Prochaine action
 
-Pousser `feat/ticket-07-ports` et ouvrir sa PR vers `main`, après accord de l'utilisateur (compte IIIvan37).
+Démarrer le ticket 08 (Stubs) sur une branche issue de `main`, une fois la PR #4 fusionnée.
 
 ## Questions ouvertes
 
@@ -26,9 +25,9 @@ Pousser `feat/ticket-07-ports` et ouvrir sa PR vers `main`, après accord de l'u
 
 ## Tickets
 
-- Livrés : 01, 02, 03, 04, 05, 06, 07, 09, 10 (07 sur sa branche, PR à ouvrir).
+- Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4).
 - Démarrables : 08 ; le README du ticket 11 existe déjà, le reste du 11 attend 08.
-- Prochain : 08 (Stubs), une fois la PR du 07 fusionnée.
+- Prochain : 08 (Stubs).
 
 ## Historique
 
@@ -43,4 +42,4 @@ Pousser `feat/ticket-07-ports` et ouvrir sa PR vers `main`, après accord de l'u
 - 2026-10-23 · **ticket 10** : fichier de configuration, réglages contrôlés par une table, chemin relatif de `rasm` corrigé, revue corrigée.
 - 2026-10-23 · **première PR** : dépôt distant, `simplify` sur tout le code (*ring buffer*, `isWholeIn`), README, CI verte, PR #1.
 - 2026-10-23 · **CI au merge** : CI au seul merge dans `main`, sans les changements Markdown, PR #3.
-- 2026-10-23 · **ticket 07** : Port writes, Port reads par séquence ou fonction, Port mask `#FF00` (ADR 0007), revue et `simplify` faits.
+- 2026-10-23 · **ticket 07** : Port writes, Port reads par séquence ou fonction, Port mask `#FF00` (ADR 0007), PR #4.
