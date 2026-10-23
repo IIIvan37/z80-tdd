@@ -29,8 +29,11 @@
     "check": "biome check .",
     "check:fix": "biome check . --write",
     "depcruise": "depcruise src",
-    "example": "pnpm build && tsc --noEmit -p example && pnpm --dir example test",
+    "example": "pnpm build && tsc -p example && pnpm --dir example test",
     "gate": "pnpm typecheck && pnpm check && pnpm depcruise && pnpm test && pnpm example"
+  },
+  "peerDependencies": {
+    "vitest": "^5.0.5"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",

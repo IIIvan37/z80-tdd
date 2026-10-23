@@ -1,4 +1,4 @@
-// The build leaves out the tests, so this brings in the vitest types the augmentation below needs.
+// The augmentation below needs vitest in the program: import its types here rather than count on a test file to.
 import type {} from "vitest";
 import type { MemoryRange } from "./program.ts";
 import { hex, type MemoryChange, type Run } from "./run.ts";
