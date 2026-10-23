@@ -2,12 +2,8 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { type Assembler, rasmAssembler } from "./assembler/index.ts";
-import {
-  ADDRESS_TAKES,
-  isAddress,
-  isNopLimit,
-  NOP_LIMIT_TAKES,
-} from "./run.ts";
+import { ADDRESS_TAKES, isAddress } from "./cpu/index.ts";
+import { isNopLimit, NOP_LIMIT_TAKES } from "./nops.ts";
 
 const FILE = "z80-tdd.config.ts";
 

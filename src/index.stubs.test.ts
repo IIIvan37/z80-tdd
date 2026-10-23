@@ -223,7 +223,7 @@ describe("the Stubs of a Run", () => {
         stubs: [{ at: 0xbb5a, registers: { a: 0x100 } }],
       }),
     ).toThrow(
-      "Register a of the Stub at #BB5A cannot hold 256: it takes 0 to 255",
+      "Register A of the Stub at #BB5A cannot be 256: it takes #00 to #FF",
     );
   });
 
@@ -234,7 +234,9 @@ describe("the Stubs of a Run", () => {
       program.run("play_sound", {
         stubs: [{ at: 0xbb5a, registers: { foo: 1 } as never }],
       }),
-    ).toThrow('"foo" is not a register of the Stub at #BB5A: the registers are');
+    ).toThrow(
+      '"foo" is not a register of the Stub at #BB5A: the registers are',
+    );
   });
 
   it("refuses SP or PC set by a Stub, which its return sets", async () => {
@@ -245,7 +247,7 @@ describe("the Stubs of a Run", () => {
       expect(() =>
         program.run("play_sound", { stubs: [{ at: "play_sound", registers }] }),
       ).toThrow(
-        `Register ${name} of the Stub at play_sound cannot be set: the Stub's return sets SP and PC`,
+        `Register ${name.toUpperCase()} of the Stub at play_sound cannot be set: the Stub's return sets SP and PC`,
       );
     }
   });

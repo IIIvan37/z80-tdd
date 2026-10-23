@@ -1,6 +1,6 @@
 // CPC durations from Madram / Overlanders, "Perfectly accurate Z80 flags and CPC timing"
 // v1.0.6 (64NOPS blog). See ADR 0002 for why the tool owns this table.
-import type { Registers } from "./cpu/index.ts";
+import { FLAG_BITS, type Registers } from "./cpu/index.ts";
 
 /** The 3-bit register codes B C D E H L A; code 6, (HL), is left out. */
 const REGISTER_CODES = [0, 1, 2, 3, 4, 5, 7];
@@ -20,6 +20,13 @@ type Entry = number | Conditional;
 export const CALL_NOPS = 5;
 // What a `RET` costs, and so what a Stub costs unless the test sets its duration.
 export const RET_NOPS = 3;
+export const NOP_LIMIT_TAKES = "a whole number of NOPs, 0 or more";
+
+/** Whether `value` can be a NOP limit; one that is not would never stop a Run. */
+export function isNopLimit(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) >= 0;
+}
+
 // Each step a halted CPU takes: the NOP it executes internally until an interrupt.
 const HALTED_NOPS = 1;
 
@@ -98,7 +105,7 @@ setNops(4, ...inBits3To5(0xc7)); // rst p: 11 T-states, yet 4 NOPs (ADR 0002)
 setNops(RET_NOPS, 0xc9); // ret
 
 // The condition codes NZ Z NC C PO PE P M test, in pairs, these bits of F.
-const CONDITION_FLAGS = [0x40, 0x01, 0x04, 0x80];
+const CONDITION_FLAGS = [FLAG_BITS.z, FLAG_BITS.c, FLAG_BITS.pv, FLAG_BITS.s];
 
 function setConditional(
   met: number,

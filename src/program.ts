@@ -1,11 +1,5 @@
 import { type ConfigurationFile, loadSettings } from "./configuration-file.ts";
-import {
-  isWholeIn,
-  type LoadedProgram,
-  type Run,
-  type RunOptions,
-  run,
-} from "./run.ts";
+import { type LoadedProgram, type Run, type RunOptions, run } from "./run.ts";
 
 export interface Program {
   /** The address of `label`; fails if the Program has no such label. */
@@ -78,7 +72,7 @@ export async function loadProgram(
   return {
     address: addressOf,
     range: (label, length) => {
-      if (!isWholeIn(length, 1, 0x10000)) {
+      if (!Number.isInteger(length) || length < 1 || length > 0x10000) {
         throw new Error(
           `A range cannot be ${length} bytes long: it takes 1 to 65,536`,
         );

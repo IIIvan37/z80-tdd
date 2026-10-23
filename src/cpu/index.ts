@@ -9,3 +9,19 @@ export {
   type Registers,
   WORD_REGISTERS,
 } from "./cpu.ts";
+export {
+  checkRegisters,
+  FLAG_BITS,
+  type Flags,
+  flagsOf,
+  registerHex,
+  registerLabel,
+  withFlags,
+} from "./registers.ts";
+export {
+  ADDRESS_TAKES,
+  BYTE_TAKES,
+  hex,
+  isAddress,
+  isByte,
+} from "./values.ts";

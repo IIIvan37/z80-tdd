@@ -279,12 +279,12 @@ describe("a Run", () => {
 
     expect(() =>
       program.run("nothing", { registers: { bc: 0x12345 } }),
-    ).toThrow(/bc/);
+    ).toThrow("Register BC cannot be 74565: it takes #0000 to #FFFF");
     expect(() => program.run("nothing", { registers: { a: 0x100 } })).toThrow(
-      /\ba\b/,
+      "Register A cannot be 256: it takes #00 to #FF",
     );
     expect(() => program.run("nothing", { registers: { h: -1 } })).toThrow(
-      /\bh\b/,
+      "Register H cannot be -1: it takes #00 to #FF",
     );
   });
 
@@ -307,7 +307,7 @@ describe("a Run", () => {
 
     // @ts-expect-error PC is not a register the test may set
     expect(() => program.run("nothing", { registers: { pc: 0x1234 } })).toThrow(
-      /pc/,
+      "Register PC cannot be set: the Run starts at the entry label",
     );
   });
 

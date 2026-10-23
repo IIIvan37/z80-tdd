@@ -1,14 +1,29 @@
 import {
-  BYTE_REGISTERS,
+  ADDRESS_TAKES,
+  BYTE_TAKES,
   type Cpu,
+  checkRegisters,
   createCpu,
   disassemble,
+  type Flags,
+  flagsOf,
+  hex,
+  isAddress,
+  isByte,
   type Ports,
   type RegisterName,
   type Registers,
-  WORD_REGISTERS,
+  registerHex,
+  registerLabel,
+  withFlags,
 } from "./cpu/index.ts";
-import { CALL_NOPS, nopsOf, RET_NOPS } from "./nops.ts";
+import {
+  CALL_NOPS,
+  isNopLimit,
+  NOP_LIMIT_TAKES,
+  nopsOf,
+  RET_NOPS,
+} from "./nops.ts";
 
 // How many of the last instructions executed a failure report shows.
 const HISTORY_LENGTH = 16;
@@ -17,29 +32,6 @@ const LONGEST_INSTRUCTION = 4;
 // The return address pushed for the Routine. The Routine has returned when PC is back here
 // with the stack back where it was, so a jump to this address alone does not end the Run.
 const SENTINEL = 0xffff;
-
-/** The bits of F. `y` and `x` are the undocumented bits 5 and 3. */
-export interface Flags {
-  readonly s: boolean;
-  readonly z: boolean;
-  readonly y: boolean;
-  readonly h: boolean;
-  readonly x: boolean;
-  readonly pv: boolean;
-  readonly n: boolean;
-  readonly c: boolean;
-}
-
-const FLAG_BITS: Readonly<Record<keyof Flags, number>> = {
-  s: 0x80,
-  z: 0x40,
-  y: 0x20,
-  h: 0x10,
-  x: 0x08,
-  pv: 0x04,
-  n: 0x02,
-  c: 0x01,
-};
 
 /** The registers a test may set before a Run: all but PC, which starts at the entry label. */
 export type StartRegisters = Partial<Omit<Registers, "pc">>;
@@ -144,46 +136,13 @@ export interface LoadedProgram {
   labelNear(address: number): string;
 }
 
-export const NOP_LIMIT_TAKES = "a whole number of NOPs, 0 or more";
-
-/** Whether `value` can be a NOP limit; one that is not would never stop a Run. */
-export function isNopLimit(value: unknown): value is number {
-  return isWholeIn(value, 0, Number.POSITIVE_INFINITY);
-}
-
-export const ADDRESS_TAKES = "#0000 to #FFFF";
-
-/** Whether `value` is a 16-bit address, or a value as wide, such as a port mask. */
-export function isAddress(value: unknown): value is number {
-  return isWholeIn(value, 0, 0xffff);
-}
-
-const BYTE_TAKES = "0 to 255";
-
-function isByte(value: unknown): value is number {
-  return isWholeIn(value, 0, 0xff);
-}
-
-/** Whether `value` is a whole number from `min` to `max`. */
-export function isWholeIn(
-  value: unknown,
-  min: number,
-  max: number,
-): value is number {
-  return (
-    Number.isInteger(value) &&
-    (value as number) >= min &&
-    (value as number) <= max
-  );
-}
-
 /** Runs the Routine at `entry` on a fresh copy of `loaded` until it returns. */
 export function run(
   loaded: LoadedProgram,
   entry: number,
   options: RunOptions = {},
 ): Run {
-  checkRegisters(
+  checkSettable(
     options.registers ?? {},
     ["pc"],
     "the Run starts at the entry label",
@@ -453,25 +412,11 @@ class PortRefusal extends Error {
   }
 }
 
-const REPORTED_REGISTERS: readonly (readonly [string, keyof Registers])[][] = [
-  [
-    ["AF", "af"],
-    ["BC", "bc"],
-    ["DE", "de"],
-    ["HL", "hl"],
-  ],
-  [
-    ["AF'", "afPrime"],
-    ["BC'", "bcPrime"],
-    ["DE'", "dePrime"],
-    ["HL'", "hlPrime"],
-  ],
-  [
-    ["IX", "ix"],
-    ["IY", "iy"],
-    ["SP", "sp"],
-    ["PC", "pc"],
-  ],
+const REPORTED_REGISTERS: readonly (readonly RegisterName[])[] = [
+  ["af", "bc", "de", "hl"],
+  ["afPrime", "bcPrime", "dePrime", "hlPrime"],
+  ["ix", "iy", "sp", "pc"],
+  ["i", "r"],
 ];
 
 /** The last instructions executed, with the bytes they had when they ran, and the Stubs called among them. */
@@ -531,11 +476,11 @@ function report(
   history: readonly string[],
   registers: Registers,
 ): string {
+  const cell = (name: RegisterName) =>
+    `${registerLabel(name)} ${registerHex(name, registers[name])}`;
   const lines = REPORTED_REGISTERS.map(
-    (row) =>
-      `  ${row.map(([label, name]) => `${label} ${hex(registers[name])}`).join("  ")}`,
+    (row) => `  ${row.map(cell).join("  ")}`,
   );
-  const iAndR = `  I ${hex(registers.i, 2)}  R ${hex(registers.r, 2)}`;
   return [
     reason,
     "",
@@ -544,7 +489,6 @@ function report(
     "",
     "Registers:",
     ...lines,
-    iAndR,
   ].join("\n");
 }
 
@@ -595,7 +539,7 @@ function stubsByAddress(
       throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
     }
     const name = nameOf(at);
-    checkRegisters(
+    checkSettable(
       registers ?? {},
       ["sp", "pc"],
       "the Stub's return sets SP and PC",
@@ -619,44 +563,24 @@ function stubsByAddress(
 }
 
 /**
- * Fails on a register in `unsettable`, which `why` explains, or a value too wide for its register.
- * `setter` follows the register's name in the message, as "Register a of the Stub at #BB5A".
+ * Fails on a register in `unsettable`, which `why` explains, then as `checkRegisters` does.
+ * `setter` follows the register's name in the message, as "Register A of the Stub at #BB5A".
  */
-function checkRegisters(
+function checkSettable(
   registers: StartRegisters,
   unsettable: readonly RegisterName[],
   why: string,
   setter?: string,
 ): void {
-  const subject = (name: string) =>
-    setter === undefined ? `Register ${name}` : `Register ${name} ${setter}`;
-  const names: readonly string[] = [...BYTE_REGISTERS, ...WORD_REGISTERS];
-  for (const name of Object.keys(registers)) {
-    if (!names.includes(name)) {
-      const of = setter === undefined ? "" : ` ${setter}`;
+  const of = setter === undefined ? "" : ` ${setter}`;
+  for (const name of unsettable) {
+    if (name in registers) {
       throw new Error(
-        `"${name}" is not a register${of}: the registers are ${names.join(", ")}`,
+        `Register ${registerLabel(name)}${of} cannot be set: ${why}`,
       );
     }
   }
-  for (const name of unsettable) {
-    if (name in registers) {
-      throw new Error(`${subject(name)} cannot be set: ${why}`);
-    }
-  }
-  for (const [names, max] of [
-    [WORD_REGISTERS, 0xffff],
-    [BYTE_REGISTERS, 0xff],
-  ] as const) {
-    for (const name of names) {
-      const value = (registers as Partial<Registers>)[name];
-      if (value !== undefined && !isWholeIn(value, 0, max)) {
-        throw new Error(
-          `${subject(name)} cannot hold ${value}: it takes 0 to ${max}`,
-        );
-      }
-    }
-  }
+  checkRegisters(registers, setter);
 }
 
 /** Sets `registers`, then the `flags` over the bits of F. */
@@ -683,25 +607,4 @@ function returnFromStub(cpu: Cpu, before: Registers, stub: Stub): void {
 
 function hasReturned({ pc, sp }: Registers, callerSp: number): boolean {
   return pc === SENTINEL && sp === callerSp;
-}
-
-function withFlags(f: number, flags: Partial<Flags>): number {
-  let result = f;
-  for (const [name, set] of Object.entries(flags) as [keyof Flags, boolean][]) {
-    result = set ? result | FLAG_BITS[name] : result & ~FLAG_BITS[name];
-  }
-  return result;
-}
-
-function flagsOf(f: number): Flags {
-  const entries = Object.entries(FLAG_BITS).map(([name, bit]) => [
-    name,
-    (f & bit) !== 0,
-  ]);
-  return Object.fromEntries(entries) as Flags;
-}
-
-/** `value` in CPC hexadecimal, as `#C000`. */
-export function hex(value: number, digits = 4): string {
-  return `#${value.toString(16).toUpperCase().padStart(digits, "0")}`;
 }
