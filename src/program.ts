@@ -1,4 +1,4 @@
-import type { Assembler } from "./assembler/index.ts";
+import { type ConfigurationFile, loadSettings } from "./configuration-file.ts";
 import { type LoadedProgram, type Run, type RunOptions, run } from "./run.ts";
 
 export interface Program {
@@ -14,16 +14,14 @@ export interface MemoryRange {
   readonly length: number;
 }
 
-export interface LoadProgramOptions {
-  readonly source: string;
-  readonly assembler: Assembler;
-}
+/** Overrides the configuration file for one test file. */
+export type LoadProgramOptions = ConfigurationFile;
 
-/** Assembles `source` and loads it at its real addresses into 64 KB of memory. */
-export async function loadProgram({
-  source,
-  assembler,
-}: LoadProgramOptions): Promise<Program> {
+/** Assembles the source file of the configuration file, or the test file's, and loads it at its real addresses into 64 KB of memory. */
+export async function loadProgram(
+  options: LoadProgramOptions = {},
+): Promise<Program> {
+  const { assembler, source, sp, nopLimit } = await loadSettings(options);
   const assembly = await assembler.assemble(source);
   const memory = new Uint8Array(0x10000);
   const occupied = new Uint8Array(0x10000);
@@ -50,6 +48,8 @@ export async function loadProgram({
 
   const loaded: LoadedProgram = {
     bytes: memory,
+    sp,
+    nopLimit,
     address: addressOf,
     occupies: (address) => occupied[address] === 1,
     labelNear: (address) => {

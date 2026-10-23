@@ -16,6 +16,10 @@ _Avoid_: Call, execution, invocation
 The external program that turns the CPC project's source into machine code and a symbol table; RASM is the first one supported.
 _Avoid_: Compiler, toolchain
 
+**Configuration file**:
+The typed `z80-tdd.config.ts` at the root of the CPC project, holding the **Assembler**, the default source file, the default SP and the default **NOP limit**; a test file or a **Run** can override each.
+_Avoid_: Settings file, config
+
 **CPU**:
 The emulated Z80 processor that executes a **Run**, with its registers and flags.
 _Avoid_: Processor

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { promisify, stripVTControlCharacters } from "node:util";
 import type { Assembler, Block } from "./assembler.ts";
 
@@ -19,12 +19,15 @@ const ERROR_LINE = /^\[(.+):(\d+)\] (.*)$/gm;
 const DOWNLOAD = "https://github.com/EdouardBERGE/rasm/releases";
 
 export interface RasmOptions {
-  /** Where the `rasm` binary is; by default, `rasm` on the PATH. */
+  /** Where the `rasm` binary is, from the working directory; by default, `rasm` on the PATH. */
   readonly path?: string;
 }
 
 /** An Assembler that runs RASM on a source file. */
 export function rasmAssembler({ path = "rasm" }: RasmOptions = {}): Assembler {
+  // rasm runs in a temporary folder: a path with a folder in it must not
+  // resolve from there, and a bare name stays a PATH lookup.
+  const command = path === basename(path) ? path : resolve(path);
   return {
     async assemble(source) {
       const dir = await mkdtemp(join(tmpdir(), "z80-tdd-rasm-"));
@@ -36,7 +39,7 @@ export function rasmAssembler({ path = "rasm" }: RasmOptions = {}): Assembler {
           ` include ${quoted(resolve(source))}\n save 'memory.bin',0,65536\n`,
         );
         const { stdout } = await execFileAsync(
-          path,
+          command,
           ["program.asm", "-map", "-s", "-sq", "-os", "symbols.txt"],
           { cwd: dir },
         ).catch(

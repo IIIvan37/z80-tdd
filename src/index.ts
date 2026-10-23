@@ -6,6 +6,7 @@ export {
   type RasmOptions,
   rasmAssembler,
 } from "./assembler/index.ts";
+export { type ConfigurationFile, defineConfig } from "./configuration-file.ts";
 export type { Registers } from "./cpu/index.ts";
 export { memoryMatchers } from "./matchers.ts";
 export {

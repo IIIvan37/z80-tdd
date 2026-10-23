@@ -7,8 +7,6 @@ import {
 } from "./cpu/index.ts";
 import { CALL_NOPS, nopsOf } from "./nops.ts";
 
-const DEFAULT_SP = 0xc000;
-const DEFAULT_NOP_LIMIT = 1_000_000;
 // How many of the last instructions executed a failure report shows.
 const HISTORY_LENGTH = 16;
 // The most bytes a Z80 instruction spans.
@@ -81,15 +79,26 @@ export interface MemoryChange {
   readonly after: number;
 }
 
-/** What a Run needs from a Program: the 64 KB it was loaded into, and its labels. */
+/** What a Run needs from a Program: the 64 KB it was loaded into, its labels, and its settings. */
 export interface LoadedProgram {
   readonly bytes: Uint8Array;
+  /** The SP a Run starts with unless its registers set one. */
+  readonly sp: number;
+  /** The NOP limit of a Run that sets none. */
+  readonly nopLimit: number;
   /** The address of `label`; fails if the Program has no such label. */
   address(label: string): number;
   /** Whether the Program put a byte at `address`. */
   occupies(address: number): boolean;
   /** The label at or nearest below `address`, as `label` or `label+offset`; empty if none. */
   labelNear(address: number): string;
+}
+
+export const NOP_LIMIT_TAKES = "a whole number of NOPs, 0 or more";
+
+/** Whether `value` can be a NOP limit; one that is not would never stop a Run. */
+export function isNopLimit(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) >= 0;
 }
 
 /** Runs the Routine at `entry` on a fresh copy of `loaded` until it returns. */
@@ -99,10 +108,10 @@ export function run(
   options: RunOptions = {},
 ): Run {
   checkWidths(options.registers ?? {});
-  const nopLimit = options.nopLimit ?? DEFAULT_NOP_LIMIT;
-  if (!(Number.isInteger(nopLimit) && nopLimit >= 0)) {
+  const nopLimit = options.nopLimit ?? loaded.nopLimit;
+  if (!isNopLimit(nopLimit)) {
     throw new Error(
-      `The NOP limit cannot be ${nopLimit}: it takes a whole number of NOPs, 0 or more`,
+      `The NOP limit cannot be ${nopLimit}: it takes ${NOP_LIMIT_TAKES}`,
     );
   }
   const toAddress = (at: LabelOrAddress) =>
@@ -111,7 +120,7 @@ export function run(
   const memory = cpu.memory;
   memory.set(loaded.bytes);
 
-  const callerSp = options.registers?.sp ?? DEFAULT_SP;
+  const callerSp = options.registers?.sp ?? loaded.sp;
   const sp = (callerSp - 2) & 0xffff;
   for (const [address, byte] of [
     [sp, SENTINEL & 0xff],
