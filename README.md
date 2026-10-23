@@ -143,7 +143,7 @@ const run = program.run("game_loop", {
 expect(run.stubCalls).toMatchObject([{ at: "play_sound", registers: { a: 3 } }]);
 ```
 
-A call to a Stub costs 3 NOPs, the price of a `RET`, on top of the `CALL` the Routine paid; `nops` sets another duration. A Stub cannot set SP or PC, which its return sets.
+A call to a Stub costs 3 NOPs, the price of a `RET`, on top of the `CALL` the Routine paid; `nops` sets another duration. A Stub cannot set SP or PC, which its return sets. A failure report shows each call to a Stub as a `Stub` line among the last instructions.
 
 Two Matchers check Memory changes: `toChangeOnly(program.range(label, length))` and `toLeaveMemoryUnchanged()`. Install them with `expect.extend(memoryMatchers)`.
 
