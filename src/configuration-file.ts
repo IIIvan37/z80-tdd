@@ -16,6 +16,8 @@ export interface ConfigurationFile {
   readonly sp?: number;
   /** The longest a Run may last, in NOPs; 1,000,000 by default. */
   readonly nopLimit?: number;
+  /** The bits of a port address a Port read matches on; #FF00 by default, as the CPC decodes. */
+  readonly portMask?: number;
 }
 
 /** Each setting a Program needs: a test file's over the configuration file's, over the defaults. */
@@ -42,6 +44,10 @@ const SETTINGS: Readonly<Record<keyof ConfigurationFile, Setting>> = {
     takes: "#0000 to #FFFF",
   },
   nopLimit: { accepts: isNopLimit, takes: NOP_LIMIT_TAKES },
+  portMask: {
+    accepts: (value) => isWholeIn(value, 0, 0xffff),
+    takes: "#0000 to #FFFF",
+  },
 };
 
 /** Types the settings of `z80-tdd.config.ts`. */
@@ -59,13 +65,14 @@ export async function loadSettings(
     source,
     sp = 0xc000,
     nopLimit = 1_000_000,
+    portMask = 0xff00,
   } = { ...(await loadFile()), ...defined(overrides) };
   if (source === undefined) {
     throw new Error(
       `No source file to assemble: set "source" in ${FILE}, or pass it to loadProgram()`,
     );
   }
-  return { assembler, source, sp, nopLimit };
+  return { assembler, source, sp, nopLimit, portMask };
 }
 
 async function loadFile(): Promise<ConfigurationFile> {
