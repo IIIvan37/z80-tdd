@@ -1,4 +1,4 @@
-// Brings vitest into the build, which leaves out the tests: the augmentation below needs it.
+// The build leaves out the tests, so this brings in the vitest types the augmentation below needs.
 import type {} from "vitest";
 import type { MemoryRange } from "./program.ts";
 import { hex, type MemoryChange, type Run } from "./run.ts";

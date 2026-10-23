@@ -16,8 +16,8 @@ describe("print_string", () => {
       stubs: [{ at: TXT_OUTPUT }],
     });
 
-    expect(run.stubCalls.map(({ registers }) => registers.a)).toEqual([
-      0x48, 0x49,
-    ]);
+    expect(run.stubCalls.map(({ registers }) => registers.a)).toEqual(
+      Array.from("HI", (character) => character.charCodeAt(0)),
+    );
   });
 });

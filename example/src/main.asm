@@ -5,4 +5,4 @@
  include "border.asm"
  include "print.asm"
  include "frame.asm"
- include "buggy.asm"
+ include "failure-report.asm"

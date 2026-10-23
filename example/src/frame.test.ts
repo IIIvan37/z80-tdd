@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadProgram, type Program } from "z80-tdd";
 
+const SET_COLOUR = 0x40;
 const RED = 0x0c;
 
 describe("next_frame", () => {
@@ -16,7 +17,7 @@ describe("next_frame", () => {
     });
 
     expect(run.stubCalls).toHaveLength(1);
-    expect(run.portWrites.at(-1)?.value).toBe(0x40 | RED);
+    expect(run.portWrites.at(-1)?.value).toBe(SET_COLOUR | RED);
     expect(run.nops).toBeGreaterThan(2_000);
   });
 });

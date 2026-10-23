@@ -6,7 +6,16 @@ Write the Z80 assembly of an Amstrad CPC project test-first. Each Vitest test ru
 
 ## What a test looks like
 
-From [example/](example/). `src/clear.asm`, included by the `src/main.asm` that RASM assembles:
+From [example/](example/). `src/main.asm`, the source file RASM assembles, places the Program and includes each Routine:
+
+```z80
+ org #4000
+ include "clear.asm"
+ include "vsync.asm"
+ ...
+```
+
+`src/clear.asm`:
 
 ```z80
 ; Fills the 16 bytes of buffer with zeros.
@@ -49,6 +58,7 @@ describe("clear_buffer", () => {
     expect(run.memory("buffer", 16)).toEqual(Array(16).fill(0));
     expect(run).toChangeOnly(program.range("buffer", 16));
     expect(run.registers.hl).toBe(program.address("buffer") + 16);
+    // ld hl,nn 3 · ld bc,nn 3 · 15 turns of the loop, 12 each · the last turn 11 · ret 3
     expect(run.nops).toBe(200);
   });
 });
