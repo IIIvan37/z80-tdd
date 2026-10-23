@@ -22,15 +22,33 @@ export function registerHex(name: RegisterName, value: number): string {
   return hex(value, DIGITS.get(name));
 }
 
+interface RegisterCheck {
+  /** Follows the register in the message, as "Register A of the Stub at #BB5A". */
+  readonly setter?: string;
+  /** The registers the caller sets itself, and why, as "the Stub's return sets SP and PC". */
+  readonly unsettable?: {
+    readonly names: readonly RegisterName[];
+    readonly why: string;
+  };
+}
+
 /**
- * Fails on a name that is not a register, or a value that is not a whole number as wide as its
- * register. `setter` follows the register in the message, as "Register A of the Stub at #BB5A".
+ * Fails on a register in `unsettable`, a name that is not a register, or a value that is not a
+ * whole number as wide as its register.
  */
 export function checkRegisters(
   values: object,
-  setter?: string,
+  { setter, unsettable }: RegisterCheck = {},
 ): asserts values is Partial<Registers> {
   const of = setter === undefined ? "" : ` ${setter}`;
+  const { names = [], why = "" } = unsettable ?? {};
+  for (const name of names) {
+    if (name in values) {
+      throw new Error(
+        `Register ${registerLabel(name)}${of} cannot be set: ${why}`,
+      );
+    }
+  }
   for (const [name, value] of Object.entries(values)) {
     const digits = DIGITS.get(name);
     if (digits === undefined) {
@@ -70,7 +88,6 @@ export const FLAG_BITS: Readonly<Record<keyof Flags, number>> = {
   c: 0x01,
 };
 
-/** `f` with each of `flags` set or reset. */
 export function withFlags(f: number, flags: Partial<Flags>): number {
   let result = f;
   for (const [name, set] of Object.entries(flags) as [keyof Flags, boolean][]) {

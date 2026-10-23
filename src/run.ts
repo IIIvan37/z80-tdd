@@ -142,11 +142,9 @@ export function run(
   entry: number,
   options: RunOptions = {},
 ): Run {
-  checkSettable(
-    options.registers ?? {},
-    ["pc"],
-    "the Run starts at the entry label",
-  );
+  checkRegisters(options.registers ?? {}, {
+    unsettable: { names: ["pc"], why: "the Run starts at the entry label" },
+  });
   const nopLimit = options.nopLimit ?? loaded.nopLimit;
   if (!isNopLimit(nopLimit)) {
     throw new Error(
@@ -539,12 +537,13 @@ function stubsByAddress(
       throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
     }
     const name = nameOf(at);
-    checkSettable(
-      registers ?? {},
-      ["sp", "pc"],
-      "the Stub's return sets SP and PC",
-      `of the Stub at ${name}`,
-    );
+    checkRegisters(registers ?? {}, {
+      setter: `of the Stub at ${name}`,
+      unsettable: {
+        names: ["sp", "pc"],
+        why: "the Stub's return sets SP and PC",
+      },
+    });
     if (nops !== undefined && !isNopLimit(nops)) {
       throw new Error(
         `The Stub at ${name} cannot cost ${nops} NOPs: it takes ${NOP_LIMIT_TAKES}`,
@@ -560,27 +559,6 @@ function stubsByAddress(
     result.set(address, stub);
   }
   return result;
-}
-
-/**
- * Fails on a register in `unsettable`, which `why` explains, then as `checkRegisters` does.
- * `setter` follows the register's name in the message, as "Register A of the Stub at #BB5A".
- */
-function checkSettable(
-  registers: StartRegisters,
-  unsettable: readonly RegisterName[],
-  why: string,
-  setter?: string,
-): void {
-  const of = setter === undefined ? "" : ` ${setter}`;
-  for (const name of unsettable) {
-    if (name in registers) {
-      throw new Error(
-        `Register ${registerLabel(name)}${of} cannot be set: ${why}`,
-      );
-    }
-  }
-  checkRegisters(registers, setter);
 }
 
 /** Sets `registers`, then the `flags` over the bits of F. */
