@@ -278,14 +278,7 @@ export function run(
       stubCalls.push(
         Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
       );
-      const returnAddress =
-        (memory[before.sp] ?? 0) |
-        ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
-      setState(
-        cpu,
-        { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
-        stub.flags,
-      );
+      returnFromStub(cpu, before, stub);
       continue;
     }
     // Halted, PC is already past the HALT, and the CPU executes no instruction of the Routine.
@@ -654,6 +647,18 @@ function setState(
 ): void {
   cpu.setRegisters(registers);
   cpu.setRegisters({ f: withFlags(cpu.registers().f, flags) });
+}
+
+/** Sets the Stub's registers and flags, and pops the return address as a `RET` would. */
+function returnFromStub(cpu: Cpu, before: Registers, stub: Stub): void {
+  const { memory } = cpu;
+  const returnAddress =
+    (memory[before.sp] ?? 0) | ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
+  setState(
+    cpu,
+    { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
+    stub.flags,
+  );
 }
 
 function hasReturned({ pc, sp }: Registers, callerSp: number): boolean {
