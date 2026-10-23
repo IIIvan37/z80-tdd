@@ -1,0 +1,3 @@
+# The example CPC project installs z80-tdd from this repository, as a user installs it from npm.
+packages:
+  - example

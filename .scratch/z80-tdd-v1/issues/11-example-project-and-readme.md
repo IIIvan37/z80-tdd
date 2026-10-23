@@ -4,9 +4,9 @@
 
 **Blocked by:** 03 (Memory before and after a Run), 05 (Count NOPs for prefixed and repeated instructions), 07 (Ports), 08 (Stubs), 10 (The configuration file).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The example project has a configuration file, a few Routines in RASM syntax and tests covering registers, Memory changes, NOPs, Port writes, Port reads, Stubs and a deliberately failing case shown in the README.
-- [ ] CI runs the example project's tests.
-- [ ] The README explains installation as a dev dependency, installing RASM, the configuration file and a first test, using the vocabulary of `GLOSSARY.md`.
-- [ ] The README credits Madram / Overlanders for the timing data and states the MIT licence.
+- [x] The example project has a configuration file, a few Routines in RASM syntax and tests covering registers, Memory changes, NOPs, Port writes, Port reads, Stubs and a deliberately failing case shown in the README.
+- [x] CI runs the example project's tests.
+- [x] The README explains installation as a dev dependency, installing RASM, the configuration file and a first test, using the vocabulary of `GLOSSARY.md`.
+- [x] The README credits Madram / Overlanders for the timing data and states the MIT licence.

@@ -1,0 +1,13 @@
+{
+  "name": "z80-tdd-example",
+  "private": true,
+  "description": "A small Amstrad CPC project whose Routines are tested with z80-tdd",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5",
+    "z80-tdd": "workspace:*"
+  }
+}

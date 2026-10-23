@@ -1,3 +1,5 @@
+// The augmentation below needs vitest in the program: import its types here rather than count on a test file to.
+import type {} from "vitest";
 import type { MemoryRange } from "./program.ts";
 import { hex, type MemoryChange, type Run } from "./run.ts";
 
