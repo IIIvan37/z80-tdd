@@ -5,9 +5,8 @@
 
 ## Où on en est
 
-Les tickets 01 à 06, 09 et 10 sont livrés par la PR #1 du dépôt privé `IIIvan37/z80-tdd`, le ticket 07 (Ports) par la PR #4.
-Le ticket 08 (Stubs) est fini sur `feat/ticket-08-stubs`, revue et `simplify` faits, PR à ouvrir : option `stubs`,
-`run.stubCalls`, 3 NOPs par appel par défaut, ligne `Stub` dans le rapport d'échec.
+Les tickets 01 à 06, 09 et 10 sont livrés par la PR #1 du dépôt privé `IIIvan37/z80-tdd`, le ticket 07 (Ports) par la PR #4,
+le ticket 08 (Stubs) par la PR #5 : option `stubs`, `run.stubCalls`, 3 NOPs par appel par défaut, ligne `Stub` dans le rapport d'échec.
 La CI GitHub ne tourne qu'au merge dans `main`, hors Markdown seul ; avant une PR, `pnpm gate` local est le seul contrôle.
 Gate local vert, 2 002 tests. Le cœur Z80 reste cell80-z80 en WebAssembly (ADR 0004).
 Modules : [docs/MODULES.md](MODULES.md), règles : [CODING_STANDARDS.md](../CODING_STANDARDS.md),
@@ -15,7 +14,7 @@ spec : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md).
 
 ## Prochaine action
 
-Pousser `feat/ticket-08-stubs` et ouvrir sa PR vers `main`, après accord de l'utilisateur (compte IIIvan37).
+Démarrer le ticket 11 (projet d'exemple) sur une branche issue de `main`.
 
 ## Questions ouvertes
 
@@ -25,9 +24,9 @@ Pousser `feat/ticket-08-stubs` et ouvrir sa PR vers `main`, après accord de l'u
 
 ## Tickets
 
-- Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4), 08 (sur sa branche, PR à ouvrir).
+- Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4), 08 (PR #5).
 - Démarrables : 11 (projet d'exemple ; son README existe déjà).
-- Prochain : 11, une fois la PR du 08 fusionnée.
+- Prochain : 11.
 
 ## Historique
 
@@ -43,4 +42,4 @@ Pousser `feat/ticket-08-stubs` et ouvrir sa PR vers `main`, après accord de l'u
 - 2026-10-23 · **première PR** : dépôt distant, `simplify` sur tout le code (*ring buffer*, `isWholeIn`), README, CI verte, PR #1.
 - 2026-10-23 · **CI au merge** : CI au seul merge dans `main`, sans les changements Markdown, PR #3.
 - 2026-10-23 · **ticket 07** : Port writes, Port reads par séquence ou fonction, Port mask `#FF00` (ADR 0007), PR #4.
-- 2026-10-23 · **ticket 08** : Stubs par label ou adresse, `stubCalls`, coût d'un `RET` par défaut, ligne `Stub` du rapport, revue faite.
+- 2026-10-23 · **ticket 08** : Stubs par label ou adresse, `stubCalls`, coût d'un `RET` par défaut, ligne `Stub` du rapport, PR #5.
