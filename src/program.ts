@@ -27,9 +27,9 @@ export type LoadProgramOptions = ConfigurationFile;
 export async function loadProgram(
   options: LoadProgramOptions = {},
 ): Promise<Program> {
-  const { assembler, source, sp, nopLimit, portMask } =
+  const { assembler, source, root, sp, nopLimit, portMask } =
     await loadSettings(options);
-  const assembly = await assembler.assemble(source);
+  const assembly = await assembler.assemble(source, root);
   const memory = new Uint8Array(0x10000);
   const occupied = new Uint8Array(0x10000);
   for (const block of assembly.blocks) {

@@ -108,7 +108,7 @@ export default defineConfig({
 
 - A test file overrides any setting: `loadProgram({ source: "src/clear.asm" })`.
 - A Run overrides the SP, the NOP limit and the Port mask: `program.run("clear_buffer", { registers: { sp: 0x8000 }, nopLimit: 500 })`.
-- z80-tdd reads the file in the working directory, where Vitest runs. A path to `rasm` that holds a folder is read from there too.
+- z80-tdd reads the nearest `z80-tdd.config.ts` in the folder where Vitest runs or in a folder above it. That folder is the project root: `source`, and a path to `rasm` that holds a folder, start from there.
 - A setting it does not know, or a value it refuses, fails the test and names the setting.
 
 ## Running a Routine

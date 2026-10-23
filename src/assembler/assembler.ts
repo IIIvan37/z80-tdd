@@ -10,5 +10,6 @@ export interface Assembly {
 }
 
 export interface Assembler {
-  assemble(source: string): Promise<Assembly>;
+  /** `root` is the folder a relative path starts from: the project root, or the working directory by default. */
+  assemble(source: string, root?: string): Promise<Assembly>;
 }

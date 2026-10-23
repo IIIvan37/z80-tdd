@@ -233,6 +233,27 @@ export default defineConfig({ ${settings} });
     );
   });
 
+  it("is found from a folder below the project root", async () => {
+    await configure(`assembler: ${ASSEMBLER}, source: "main.asm"`);
+    await mkdir(join(project, "src", "screen"), { recursive: true });
+    process.chdir(join(project, "src", "screen"));
+
+    const program = await loadProgram();
+
+    expect(program.run("set_a").registers.a).toBe(0x2a);
+  });
+
+  it("gives the source file from the project root", async () => {
+    await writeFile(join(project, "main.asm"), RASM_SOURCE);
+    await configure(`source: "main.asm"`);
+    await mkdir(join(project, "src"));
+    process.chdir(join(project, "src"));
+
+    const program = await loadProgram();
+
+    expect(program.run("start").registers.a).toBe(7);
+  });
+
   it("names no Assembler, so loadProgram() runs rasm on the PATH", async () => {
     await writeFile(join(project, "main.asm"), RASM_SOURCE);
     await configure(`source: "main.asm"`);
@@ -256,6 +277,8 @@ export default defineConfig({ ${settings} });
     await configure(
       `assembler: rasmAssembler({ path: "tools/rasm" }), source: "main.asm"`,
     );
+    await mkdir(join(project, "src"));
+    process.chdir(join(project, "src"));
 
     const program = await loadProgram();
 
