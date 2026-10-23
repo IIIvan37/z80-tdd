@@ -157,12 +157,10 @@ export function run(
       `The port mask cannot be ${portMask}: it takes ${ADDRESS_TAKES}`,
     );
   }
-  const supplied = options.ports ?? {};
-  checkPorts(supplied, portMask);
+  const ports = new SuppliedPorts(options.ports ?? {}, portMask);
   const toAddress = (at: LabelOrAddress) =>
     typeof at === "string" ? loaded.address(at) : at;
   const stubs = new Stubs(options.stubs ?? [], toAddress);
-  const ports = new SuppliedPorts(supplied, portMask);
   const cpu = createCpu(ports);
   const memory = cpu.memory;
   memory.set(loaded.bytes);
@@ -326,10 +324,36 @@ class SuppliedPorts implements Ports {
   // How many values of each key's sequence the Routine has read.
   private readonly counts = new Map<number, number>();
 
+  /** Fails on a port that is not an address or has bits outside `mask`, or on values that are not bytes or a function. */
   constructor(
     private readonly supplied: Readonly<Record<number, PortValues>>,
     private readonly mask: number,
-  ) {}
+  ) {
+    for (const [key, values] of Object.entries(supplied)) {
+      const port = Number(key);
+      if (!isAddress(port)) {
+        throw new Error(`A port cannot be ${key}: it takes ${ADDRESS_TAKES}`);
+      }
+      if ((port & mask) !== port) {
+        throw new Error(
+          `The port ${hex(port)} has bits outside the port mask ${hex(mask)}, so no Port read would match it`,
+        );
+      }
+      if (Array.isArray(values)) {
+        for (const value of values) {
+          if (!isByte(value)) {
+            throw new Error(
+              `A value read at port ${hex(port)} cannot be ${value}: it takes ${BYTE_TAKES}`,
+            );
+          }
+        }
+      } else if (typeof values !== "function") {
+        throw new TypeError(
+          `The port ${hex(port)} cannot be given ${JSON.stringify(values)}: it takes a list of values or a function`,
+        );
+      }
+    }
+  }
 
   read(address: number): number {
     const key = address & this.mask;
@@ -550,36 +574,6 @@ function report(
     "Registers:",
     ...lines,
   ].join("\n");
-}
-
-function checkPorts(
-  ports: Readonly<Record<number, PortValues>>,
-  portMask: number,
-): void {
-  for (const [key, values] of Object.entries(ports)) {
-    const port = Number(key);
-    if (!isAddress(port)) {
-      throw new Error(`A port cannot be ${key}: it takes ${ADDRESS_TAKES}`);
-    }
-    if ((port & portMask) !== port) {
-      throw new Error(
-        `The port ${hex(port)} has bits outside the port mask ${hex(portMask)}, so no Port read would match it`,
-      );
-    }
-    if (Array.isArray(values)) {
-      for (const value of values) {
-        if (!isByte(value)) {
-          throw new Error(
-            `A value read at port ${hex(port)} cannot be ${value}: it takes ${BYTE_TAKES}`,
-          );
-        }
-      }
-    } else if (typeof values !== "function") {
-      throw new Error(
-        `The port ${hex(port)} cannot be given ${JSON.stringify(values)}: it takes a list of values or a function`,
-      );
-    }
-  }
 }
 
 /** Sets `registers`, then the `flags` over the bits of F. */
