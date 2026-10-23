@@ -1,8 +1,11 @@
 name: CI
 
+# A change to Markdown alone (docs, tickets, session reports) cannot break the gate.
 on:
   push:
+    paths-ignore: ["**.md"]
   pull_request:
+    paths-ignore: ["**.md"]
 
 jobs:
   gate:
