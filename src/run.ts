@@ -2,6 +2,7 @@ import {
   BYTE_REGISTERS,
   createCpu,
   disassemble,
+  type Ports,
   type Registers,
   WORD_REGISTERS,
 } from "./cpu/index.ts";
@@ -123,6 +124,17 @@ export function isNopLimit(value: unknown): value is number {
   return isWholeIn(value, 0, Number.POSITIVE_INFINITY);
 }
 
+export const ADDRESS_TAKES = "#0000 to #FFFF";
+
+/** Whether `value` is a 16-bit address, or a value as wide, such as a port mask. */
+export function isAddress(value: unknown): value is number {
+  return isWholeIn(value, 0, 0xffff);
+}
+
+function isByte(value: unknown): value is number {
+  return isWholeIn(value, 0, 0xff);
+}
+
 /** Whether `value` is a whole number from `min` to `max`. */
 export function isWholeIn(
   value: unknown,
@@ -150,70 +162,17 @@ export function run(
     );
   }
   const portMask = options.portMask ?? loaded.portMask;
-  if (!isWholeIn(portMask, 0, 0xffff)) {
+  if (!isAddress(portMask)) {
     throw new Error(
-      `The port mask cannot be ${portMask}: it takes #0000 to #FFFF`,
+      `The port mask cannot be ${portMask}: it takes ${ADDRESS_TAKES}`,
     );
   }
-  for (const [key, values] of Object.entries(options.ports ?? {})) {
-    const port = Number(key);
-    if ((port & portMask) !== port) {
-      throw new Error(
-        `The port ${hex(port)} has bits outside the port mask ${hex(portMask)}, so no Port read would match it`,
-      );
-    }
-    if (typeof values !== "function") {
-      for (const value of values) {
-        checkPortValue(value, port);
-      }
-    }
-  }
+  const supplied = options.ports ?? {};
+  checkPorts(supplied, portMask);
   const toAddress = (at: LabelOrAddress) =>
     typeof at === "string" ? loaded.address(at) : at;
-  const portWrites: PortWrite[] = [];
-  const portReads = new Map<number, number>();
-  // A read the test did not supply; the Run fails once the IN has stepped.
-  let refusedRead: { address: number; key: number; why: string } | undefined;
-  const cpu = createCpu({
-    read: (address) => {
-      const key = address & portMask;
-      const values = options.ports?.[key];
-      if (values === undefined) {
-        refusedRead = { address, key, why: ", which the test did not supply" };
-        return 0xff;
-      }
-      if (typeof values === "function") {
-        const value = values({
-          address,
-          writes: Object.freeze(portWrites.slice()),
-        });
-        if (!isWholeIn(value, 0, 0xff)) {
-          refusedRead = {
-            address,
-            key,
-            why: `, whose function returned ${value}: it takes 0 to 255`,
-          };
-          return 0xff;
-        }
-        return value;
-      }
-      const count = portReads.get(key) ?? 0;
-      const value = values[count];
-      if (value === undefined) {
-        refusedRead = {
-          address,
-          key,
-          why: ` past the end of its ${values.length} value${values.length === 1 ? "" : "s"}`,
-        };
-        return 0xff;
-      }
-      portReads.set(key, count + 1);
-      return value;
-    },
-    write: (address, value) => {
-      portWrites.push(Object.freeze({ address, value }));
-    },
-  });
+  const ports = new SuppliedPorts(supplied, portMask);
+  const cpu = createCpu(ports);
   const memory = cpu.memory;
   memory.set(loaded.bytes);
 
@@ -233,7 +192,7 @@ export function run(
     const start = toAddress(at);
     for (const [i, byte] of bytes.entries()) {
       const address = (start + i) & 0xffff;
-      if (!isWholeIn(byte, 0, 0xff)) {
+      if (!isByte(byte)) {
         throw new Error(
           `The byte at ${hex(address)} cannot be ${byte}: it takes 0 to 255`,
         );
@@ -252,8 +211,8 @@ export function run(
   const initial = memory.slice();
   const stack = new Stack(callerSp);
   const history = new History();
-  const failure = (reason: string, registers: Registers) =>
-    new Error(report(reason, history.lines(loaded), registers));
+  const failure = (reason: string, registers: Registers, cause?: unknown) =>
+    new Error(report(reason, history.lines(loaded), registers), { cause });
   let nops = 0;
   for (
     let before = cpu.registers();
@@ -281,11 +240,12 @@ export function run(
       history.record(memory, before.pc);
     }
     cpu.step();
-    if (refusedRead !== undefined) {
-      const { address, key, why } = refusedRead;
+    if (ports.refusal !== undefined) {
+      const { address, key, why, cause } = ports.refusal;
       throw failure(
-        `The Routine read port ${hex(address)} (key ${hex(key)}) at ${hex(before.pc)}${why}`,
+        `The Routine read port ${hex(address)} (key ${hex(key)}) at ${hex(before.pc)}, ${why}`,
         before,
+        cause,
       );
     }
   }
@@ -301,7 +261,7 @@ export function run(
     memoryChanges: Object.freeze(
       changes(initial, final).filter(({ address }) => !stack.holds(address)),
     ),
-    portWrites: Object.freeze(portWrites),
+    portWrites: Object.freeze(ports.writes),
     memory: (at: LabelOrAddress, length = 1) => {
       const address = toAddress(at);
       return Object.freeze(
@@ -353,6 +313,79 @@ function changes(initial: Uint8Array, final: Uint8Array): MemoryChange[] {
     }
   }
   return result;
+}
+
+/** The ports of a Run: what the test supplied for each Port read, and the Port writes. */
+class SuppliedPorts implements Ports {
+  readonly writes: PortWrite[] = [];
+  /** Why a Port read failed; the Run fails once the IN has stepped, with the registers before it. */
+  refusal: Refusal | undefined;
+  // How many values of each key's sequence the Routine has read.
+  private readonly counts = new Map<number, number>();
+
+  constructor(
+    private readonly supplied: Readonly<Record<number, PortValues>>,
+    private readonly mask: number,
+  ) {}
+
+  read(address: number): number {
+    const values = this.supplied[address & this.mask];
+    if (values === undefined) {
+      return this.refuse(address, "which the test did not supply");
+    }
+    return typeof values === "function"
+      ? this.compute(values, address)
+      : this.next(values, address);
+  }
+
+  write(address: number, value: number): void {
+    this.writes.push(Object.freeze({ address, value }));
+  }
+
+  private compute(compute: PortFunction, address: number): number {
+    let value: number;
+    try {
+      value = compute({ address, writes: Object.freeze(this.writes.slice()) });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : cause;
+      return this.refuse(address, `whose function failed: ${message}`, cause);
+    }
+    return isByte(value)
+      ? value
+      : this.refuse(
+          address,
+          `whose function returned ${value}: it takes 0 to 255`,
+        );
+  }
+
+  private next(values: readonly number[], address: number): number {
+    const key = address & this.mask;
+    const count = this.counts.get(key) ?? 0;
+    const value = values[count];
+    if (value === undefined) {
+      const plural = values.length === 1 ? "" : "s";
+      return this.refuse(
+        address,
+        `past the end of its ${values.length} value${plural}`,
+      );
+    }
+    this.counts.set(key, count + 1);
+    return value;
+  }
+
+  // The CPU reads #FF in place of the refused value; the Run fails before it goes on.
+  private refuse(address: number, why: string, cause?: unknown): number {
+    this.refusal = { address, key: address & this.mask, why, cause };
+    return 0xff;
+  }
+}
+
+interface Refusal {
+  readonly address: number;
+  readonly key: number;
+  /** Ends the reason of the failure: "which the test did not supply"… */
+  readonly why: string;
+  readonly cause: unknown;
 }
 
 const REPORTED_REGISTERS: readonly (readonly [string, keyof Registers])[][] = [
@@ -440,11 +473,33 @@ function report(
   ].join("\n");
 }
 
-function checkPortValue(value: number, address: number): void {
-  if (!isWholeIn(value, 0, 0xff)) {
-    throw new Error(
-      `A value read at port ${hex(address)} cannot be ${value}: it takes 0 to 255`,
-    );
+function checkPorts(
+  ports: Readonly<Record<number, PortValues>>,
+  portMask: number,
+): void {
+  for (const [key, values] of Object.entries(ports)) {
+    const port = Number(key);
+    if (!isAddress(port)) {
+      throw new Error(`A port cannot be ${key}: it takes ${ADDRESS_TAKES}`);
+    }
+    if ((port & portMask) !== port) {
+      throw new Error(
+        `The port ${hex(port)} has bits outside the port mask ${hex(portMask)}, so no Port read would match it`,
+      );
+    }
+    if (Array.isArray(values)) {
+      for (const value of values) {
+        if (!isByte(value)) {
+          throw new Error(
+            `A value read at port ${hex(port)} cannot be ${value}: it takes 0 to 255`,
+          );
+        }
+      }
+    } else if (typeof values !== "function") {
+      throw new Error(
+        `The port ${hex(port)} cannot be given ${JSON.stringify(values)}: it takes a list of values or a function`,
+      );
+    }
   }
 }
 

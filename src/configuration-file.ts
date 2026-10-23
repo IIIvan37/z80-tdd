@@ -2,7 +2,12 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { type Assembler, rasmAssembler } from "./assembler/index.ts";
-import { isNopLimit, isWholeIn, NOP_LIMIT_TAKES } from "./run.ts";
+import {
+  ADDRESS_TAKES,
+  isAddress,
+  isNopLimit,
+  NOP_LIMIT_TAKES,
+} from "./run.ts";
 
 const FILE = "z80-tdd.config.ts";
 
@@ -40,13 +45,13 @@ const SETTINGS: Readonly<Record<keyof ConfigurationFile, Setting>> = {
     takes: "the path of a source file",
   },
   sp: {
-    accepts: (value) => isWholeIn(value, 0, 0xffff),
-    takes: "#0000 to #FFFF",
+    accepts: isAddress,
+    takes: ADDRESS_TAKES,
   },
   nopLimit: { accepts: isNopLimit, takes: NOP_LIMIT_TAKES },
   portMask: {
-    accepts: (value) => isWholeIn(value, 0, 0xffff),
-    takes: "#0000 to #FFFF",
+    accepts: isAddress,
+    takes: ADDRESS_TAKES,
   },
 };
 

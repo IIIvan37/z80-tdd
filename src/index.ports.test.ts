@@ -14,6 +14,7 @@ const OUT_C_C = 0x49;
 const OUT_C_A = 0x79;
 const OTIR = 0xb3;
 const IN_A_C = 0x78;
+const INIR = 0xb2;
 const RET = 0xc9;
 
 // ld b,#f5 / wait: in a,(c) / rra / jr nc,wait / ret
@@ -128,7 +129,7 @@ describe("the Port reads of a Run", () => {
       });
 
     expect(failure).toThrow(
-      /^The Routine read port #F500 \(key #F500\) at #4004 past the end of its 2 values\n/,
+      /^The Routine read port #F500 \(key #F500\) at #4004, past the end of its 2 values\n/,
     );
     expect(failure).toThrow(/PC #4004/);
   });
@@ -152,6 +153,22 @@ describe("the Port reads of a Run", () => {
     });
 
     expect(run.registers.a).toBe(0xfb);
+  });
+
+  it("reads each byte of INIR at BC before B is decremented, so its key changes", async () => {
+    const program = await load({
+      blocks: [
+        { address: 0x4000, bytes: [LD_HL_NN, 0x00, 0x50, ED, INIR, RET] },
+      ],
+      symbols: { receive: 0x4000 },
+    });
+
+    const run = program.run("receive", {
+      registers: { bc: 0x02c0 },
+      ports: { 0x0200: [0x11], 0x0100: [0x22] },
+    });
+
+    expect(run.memory(0x5000, 2)).toEqual([0x11, 0x22]);
   });
 
   it("gives the test's function the full port address read", async () => {
@@ -260,5 +277,57 @@ describe("the Port reads of a Run", () => {
       /^The Routine read port #F4C0 \(key #F400\) at #4000, whose function returned 256: it takes 0 to 255\n/,
     );
     expect(failure).toThrow(/#4000 +read_ppi_a +IN A,\(C\)\n/);
+  });
+
+  it("fails when the test's function throws, with its message and the failure report", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [ED, IN_A_C, RET] }],
+      symbols: { read_ppi_a: 0x4000 },
+    });
+
+    const failure = () =>
+      program.run("read_ppi_a", {
+        registers: { bc: 0xf4c0 },
+        ports: {
+          0xf400: () => {
+            throw new Error("no PSG register selected");
+          },
+        },
+      });
+
+    expect(failure).toThrow(
+      /^The Routine read port #F4C0 \(key #F400\) at #4000, whose function failed: no PSG register selected\n/,
+    );
+    expect(failure).toThrow(/#4000 +read_ppi_a +IN A,\(C\)\n/);
+  });
+
+  it.each([
+    ["1.5", 1.5],
+    ["-1", -1],
+    ["65536", 0x10000],
+    ["NaN", Number.NaN],
+  ])("refuses the port %s, which is not an address", async (shown, port) => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET] }],
+      symbols: { nothing: 0x4000 },
+    });
+
+    expect(() =>
+      program.run("nothing", { portMask: 0xffff, ports: { [port]: [0] } }),
+    ).toThrow(`A port cannot be ${shown}: it takes #0000 to #FFFF`);
+  });
+
+  it("refuses a port given neither values nor a function", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET] }],
+      symbols: { nothing: 0x4000 },
+    });
+
+    expect(() =>
+      // @ts-expect-error: a single value instead of a list
+      program.run("nothing", { ports: { 0xf500: 5 } }),
+    ).toThrow(
+      /^The port #F500 cannot be given 5: it takes a list of values or a function$/,
+    );
   });
 });
