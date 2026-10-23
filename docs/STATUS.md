@@ -16,7 +16,6 @@ spec : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md).
 ## Prochaine action
 
 Revue de fin de jalon v1 : `mattpocock-skills:code-review` et `security-review` sur tout le diff de la v1, puis corriger les constats bloquants.
-Ensuite, l'utilisateur lance `/mattpocock-skills:improve-codebase-architecture` (skill qu'il invoque lui-même) ; hot spot : `src/run.ts`.
 
 ## Questions ouvertes
 
@@ -28,7 +27,7 @@ Ensuite, l'utilisateur lance `/mattpocock-skills:improve-codebase-architecture` 
 
 - Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4), 08 (PR #5), 11 (PR #6).
 - Démarrables : aucun ; les onze tickets de la v1 sont `done`.
-- Prochain : aucun ticket ; revue de fin de jalon v1, puis `improve-codebase-architecture`.
+- Prochain : aucun ticket ; après la revue de jalon, l'utilisateur lance `/mattpocock-skills:improve-codebase-architecture` (hot spot : `src/run.ts`).
 
 ## Historique
 
