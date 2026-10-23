@@ -1,4 +1,5 @@
 import { type ConfigurationFile, loadSettings } from "./configuration-file.ts";
+import { isWholeIn } from "./cpu/index.ts";
 import { type LoadedProgram, type Run, type RunOptions, run } from "./run.ts";
 
 export interface Program {
@@ -72,7 +73,7 @@ export async function loadProgram(
   return {
     address: addressOf,
     range: (label, length) => {
-      if (!Number.isInteger(length) || length < 1 || length > 0x10000) {
+      if (!isWholeIn(length, 1, 0x10000)) {
         throw new Error(
           `A range cannot be ${length} bytes long: it takes 1 to 65,536`,
         );

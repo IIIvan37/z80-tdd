@@ -4,7 +4,7 @@ import {
   type Registers,
   WORD_REGISTERS,
 } from "./cpu.ts";
-import { hex, isWholeIn } from "./values.ts";
+import { hex, isWholeIn } from "./numbers.ts";
 
 /** The hexadecimal digits of each register: 2 for 8 bits, 4 for 16. */
 const DIGITS = new Map<string, number>([

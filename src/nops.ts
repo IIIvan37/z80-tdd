@@ -1,6 +1,6 @@
 // CPC durations from Madram / Overlanders, "Perfectly accurate Z80 flags and CPC timing"
 // v1.0.6 (64NOPS blog). See ADR 0002 for why the tool owns this table.
-import { FLAG_BITS, type Registers } from "./cpu/index.ts";
+import { FLAG_BITS, isWholeIn, type Registers } from "./cpu/index.ts";
 
 /** The 3-bit register codes B C D E H L A; code 6, (HL), is left out. */
 const REGISTER_CODES = [0, 1, 2, 3, 4, 5, 7];
@@ -24,7 +24,7 @@ export const NOP_LIMIT_TAKES = "a whole number of NOPs, 0 or more";
 
 /** Whether `value` can be a NOP limit; one that is not would never stop a Run. */
 export function isNopLimit(value: unknown): value is number {
-  return Number.isInteger(value) && (value as number) >= 0;
+  return isWholeIn(value, 0, Number.POSITIVE_INFINITY);
 }
 
 // Each step a halted CPU takes: the NOP it executes internally until an interrupt.

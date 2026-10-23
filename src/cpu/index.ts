@@ -9,6 +9,14 @@ export {
   WORD_REGISTERS,
 } from "./cpu.ts";
 export {
+  ADDRESS_TAKES,
+  BYTE_TAKES,
+  hex,
+  isAddress,
+  isByte,
+  isWholeIn,
+} from "./numbers.ts";
+export {
   checkRegisters,
   FLAG_BITS,
   type Flags,
@@ -17,10 +25,3 @@ export {
   registerLabel,
   withFlags,
 } from "./registers.ts";
-export {
-  ADDRESS_TAKES,
-  BYTE_TAKES,
-  hex,
-  isAddress,
-  isByte,
-} from "./values.ts";

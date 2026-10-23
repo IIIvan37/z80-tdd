@@ -16,7 +16,6 @@ export function isByte(value: unknown): value is number {
   return isWholeIn(value, 0, 0xff);
 }
 
-/** Whether `value` is a whole number from `min` to `max`. */
 export function isWholeIn(
   value: unknown,
   min: number,
