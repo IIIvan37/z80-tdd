@@ -5,14 +5,14 @@
 
 ## Où on en est
 
-Le ticket 05 est livré : chaque opcode que cell80 exécute a un compte de NOPs, préfixé (CB, ED, DD, FD, DDCB, FDCB) ou non, et les instructions de
-bloc répétées coûtent 6 NOPs par itération puis 5 (4 pour `CPIR`, `CPDR`) à la dernière. Gate `pnpm gate` vert, 1 915 tests à l'API publique.
+Le ticket 03 est livré : un test écrit des octets avant un Run, lit la mémoire après, obtient les Memory changes (sans la pile de la
+Routine, ADR 0005) et les vérifie avec les Matchers `toChangeOnly` et `toLeaveMemoryUnchanged`. Gate `pnpm gate` vert, 1 932 tests.
 Le cœur Z80 reste cell80-z80 en WebAssembly (ADR 0004). Modules : [docs/MODULES.md](MODULES.md), règles : [CODING_STANDARDS.md](../CODING_STANDARDS.md),
 spec : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md).
 
 ## Prochaine action
 
-Lancer `/implement` sur le ticket 03 (mémoire avant et après un Run), sur une branche qui part du ticket 05.
+Lancer `mattpocock-skills:tdd` sur le ticket 09 (Assembler RASM), sur une branche qui part du ticket 03.
 
 ## Questions ouvertes
 
@@ -21,9 +21,9 @@ Lancer `/implement` sur le ticket 03 (mémoire avant et après un Run), sur une 
 
 ## Tickets
 
-- Livrés : 01, 02, 04, 05, 06.
-- Démarrables : 03, 07, 08, 09.
-- Prochain : 03 (débloque 11 avec 07, 08 et 10).
+- Livrés : 01, 02, 03, 04, 05, 06.
+- Démarrables : 07, 08, 09.
+- Prochain : 09 (débloque 10, puis 11 avec 07 et 08).
 
 ## Historique
 
@@ -33,3 +33,4 @@ Lancer `/implement` sur le ticket 03 (mémoire avant et après un Run), sur une 
 - 2026-10-23 · **ticket 04** : durée en NOPs des instructions sans préfixe, table de Madram, crédit dans `CREDITS.md`.
 - 2026-10-23 · **ticket 06** : NOP limit, rapport d'échec avec désassembleur de cell80, `HALT` compté, `registers()` 40 fois plus rapide.
 - 2026-10-23 · **ticket 05** : NOPs des instructions préfixées et répétées, chaînes de préfixes, `ld (ix+n),n` calculé par la règle de Madram.
+- 2026-10-23 · **ticket 03** : mémoire avant et après un Run, Memory changes sans la pile (ADR 0005), Matchers, revue corrigée.
