@@ -32,7 +32,7 @@
 
 ## État pour reprendre
 
-- **Prochaine action :** pousser `feat/ticket-08-stubs` et ouvrir sa PR vers `main` avec le compte IIIvan37.
+- **Prochaine action :** demander à l'utilisateur s'il faut pousser `feat/ticket-08-stubs` et ouvrir sa PR vers `main` avec le compte IIIvan37 (question posée, sans réponse).
 - **Arbre :** propre après le commit de ce rapport · branche non poussée, non fusionnée.
 - **Pièges :**
   - `gh` a un autre compte comme compte actif : passer `GH_TOKEN=$(gh auth token --user IIIvan37)` à chaque commande `gh`.
