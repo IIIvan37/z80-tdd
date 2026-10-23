@@ -5,30 +5,30 @@
 
 ## Où on en est
 
-Les onze tickets de la v1 sont livrés : 01 à 06, 09 et 10 par la PR #1, 07 par la PR #4, 08 par la PR #5, 11 par la PR #6.
-La revue de fin de jalon v1 (code-review et security-review sur tout le diff) est livrée par la PR #7.
-Elle corrige deux constats bloquants : le fichier de configuration se cherche vers le haut et fixe la racine du projet (ADR 0008),
-et le matcher `toHaveRegisters` s'ajoute à `runMatchers` (ex-`memoryMatchers`). Aucune vulnérabilité trouvée.
+Les onze tickets de la v1 sont livrés, puis la revue de jalon v1 (PR #7, ADR 0008).
+La passe d'architecture sur `src/run.ts` est livrée par les PR #8 et #10 (la #9, fusionnée dans la branche de la #8, est remplacée par la #10).
+Le vocabulaire Z80 (registres, flags, `hex`, contrôles de nombres) vit dans le module CPU ; le Run et un Stub refusent un registre inconnu ou `undefined`.
+Le Stub tient dans la classe privée `Stubs`, `SuppliedPorts` contrôle ses ports, et la complexité Sonar de `run()` passe de 32 à 15 au plus.
 La CI GitHub ne tourne qu'au merge dans `main`, hors Markdown seul ; avant une PR, `pnpm gate` local est le seul contrôle.
-Gate local vert : 2 011 tests, plus 6 dans l'exemple. Le cœur Z80 reste cell80-z80 en WebAssembly (ADR 0004).
+Gate local vert : 2 015 tests, plus 6 dans l'exemple. Le cœur Z80 reste cell80-z80 en WebAssembly (ADR 0004).
 Modules : [docs/MODULES.md](MODULES.md), règles : [CODING_STANDARDS.md](../CODING_STANDARDS.md),
 spec : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md).
 
 ## Prochaine action
 
-L'utilisateur lance `/mattpocock-skills:improve-codebase-architecture` sur `src/run.ts` ; constats d'entrée dans le dernier rapport.
+Trancher la question des T-states de cell80 (ci-dessous), seule question ouverte avant un nouveau ticket.
 
 ## Questions ouvertes
 
-- Compter les NOPs d'une instruction conditionnelle d'après les T-states que cell80 calcule déjà (`tick()` les jette dans `wasm/src/lib.rs`),
-  au lieu du choix refait en TypeScript dans `nops.ts` ? Touche l'ADR 0002 ; ouvrirait un appel WASM par pas et `nopsOf` sans `undefined`.
+- Compter les NOPs d'une instruction d'après les cycles que cell80 donne à `tick()` (ignoré dans `wasm/src/lib.rs`),
+  au lieu de la table de `nops.ts` ? Touche l'ADR 0002 ; le coût d'un pas ne serait connu qu'après `step()`.
 - Tester le paquet tel que publié (`pnpm pack`, ou `injected: true`) avant npm ? `workspace:*` ignore `files` et les peer dependencies.
 
 ## Tickets
 
-- Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4), 08 (PR #5), 11 (PR #6) ; revue de jalon v1 (PR #7).
+- Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4), 08 (PR #5), 11 (PR #6) ; revue de jalon v1 (PR #7) ; architecture de `run.ts` (PR #8, #10).
 - Démarrables : aucun ; les onze tickets de la v1 sont `done`.
-- Prochain : aucun ticket ; la passe d'architecture sur `src/run.ts` vient d'abord.
+- Prochain : aucun ticket ; la question des T-states vient d'abord.
 
 ## Historique
 
@@ -47,3 +47,4 @@ L'utilisateur lance `/mattpocock-skills:improve-codebase-architecture` sur `src/
 - 2026-10-23 · **ticket 08** : Stubs par label ou adresse, `stubCalls`, coût d'un `RET` par défaut, ligne `Stub` du rapport, PR #5.
 - 2026-10-23 · **ticket 11** : projet d'exemple sur le paquet bâti, `pnpm build` réparé, `LICENSE`, README, PR #6.
 - 2026-10-23 · **revue de jalon v1** : code-review et security-review de la v1, configuration cherchée vers le haut (ADR 0008), `toHaveRegisters`, PR #7.
+- 2026-10-23 · **architecture de run.ts** : vocabulaire Z80 dans le module CPU, classe `Stubs`, complexité de `run()` sous 15, PR #8 et #10.
