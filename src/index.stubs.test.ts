@@ -11,12 +11,21 @@ const LD_B_N = 0x06;
 const LD_B_A = 0x47;
 const CALL_NN = 0xcd;
 const JP_NN = 0xc3;
+const HALT = 0x76;
 const RET = 0xc9;
 
 function load(assembly: Assembly) {
   return loadProgram({
     source: "main.asm",
     assembler: inMemoryAssembler({ "main.asm": assembly }),
+  });
+}
+
+// A Routine that returns at once, for the checks made before the first step.
+function loadPlaySound() {
+  return load({
+    blocks: [{ address: 0x4010, bytes: [RET] }],
+    symbols: { play_sound: 0x4010 },
   });
 }
 
@@ -154,14 +163,26 @@ describe("a Stub", () => {
     expect(failure).toThrow(/^The Run reached its NOP limit of 50 NOPs\n/);
     expect(failure).toThrow(/PC #4010/);
   });
+
+  it("is not called by a halted CPU, which runs no instruction after the HALT", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [HALT, RET] }],
+      symbols: { wait_frame: 0x4000, after_halt: 0x4001 },
+    });
+
+    const failure = () =>
+      program.run("wait_frame", {
+        nopLimit: 100,
+        stubs: [{ at: "after_halt" }],
+      });
+
+    expect(failure).toThrow(/^The Run reached its NOP limit of 100 NOPs\n/);
+  });
 });
 
 describe("the Stubs of a Run", () => {
   it("refuses a Stub duration that is not a whole number of NOPs, naming the Stub", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4010, bytes: [RET] }],
-      symbols: { play_sound: 0x4010 },
-    });
+    const program = await loadPlaySound();
 
     for (const nops of [-1, 2.5]) {
       expect(() =>
@@ -173,10 +194,7 @@ describe("the Stubs of a Run", () => {
   });
 
   it("refuses a value too wide for a register the Stub sets, naming the Stub", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4010, bytes: [RET] }],
-      symbols: { play_sound: 0x4010 },
-    });
+    const program = await loadPlaySound();
 
     expect(() =>
       program.run("play_sound", {
@@ -188,10 +206,7 @@ describe("the Stubs of a Run", () => {
   });
 
   it("refuses SP or PC set by a Stub, which its return sets", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4010, bytes: [RET] }],
-      symbols: { play_sound: 0x4010 },
-    });
+    const program = await loadPlaySound();
 
     for (const name of ["sp", "pc"]) {
       const registers = { [name]: 0x8000 } as StubRegisters;
@@ -204,10 +219,7 @@ describe("the Stubs of a Run", () => {
   });
 
   it("refuses two Stubs at the same address", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4010, bytes: [RET] }],
-      symbols: { play_sound: 0x4010 },
-    });
+    const program = await loadPlaySound();
 
     expect(() =>
       program.run("play_sound", {
@@ -217,10 +229,7 @@ describe("the Stubs of a Run", () => {
   });
 
   it("refuses a Stub at a label the Program does not have, naming the label", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4010, bytes: [RET] }],
-      symbols: { play_sound: 0x4010 },
-    });
+    const program = await loadPlaySound();
 
     expect(() =>
       program.run("play_sound", { stubs: [{ at: "play_sund" }] }),
@@ -228,10 +237,7 @@ describe("the Stubs of a Run", () => {
   });
 
   it("refuses a Stub at a value that is not an address, which PC never reaches", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4010, bytes: [RET] }],
-      symbols: { play_sound: 0x4010 },
-    });
+    const program = await loadPlaySound();
 
     for (const at of [-1, 0x10000, 0.5]) {
       expect(() => program.run("play_sound", { stubs: [{ at }] })).toThrow(

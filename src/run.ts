@@ -1,8 +1,10 @@
 import {
   BYTE_REGISTERS,
+  type Cpu,
   createCpu,
   disassemble,
   type Ports,
+  type RegisterName,
   type Registers,
   WORD_REGISTERS,
 } from "./cpu/index.ts";
@@ -181,12 +183,11 @@ export function run(
   entry: number,
   options: RunOptions = {},
 ): Run {
-  if (options.registers !== undefined && "pc" in options.registers) {
-    throw new Error(
-      "Register pc cannot be set: the Run starts at the entry label",
-    );
-  }
-  checkWidths(options.registers ?? {});
+  checkRegisters(
+    options.registers ?? {},
+    ["pc"],
+    "the Run starts at the entry label",
+  );
   const nopLimit = options.nopLimit ?? loaded.nopLimit;
   if (!isNopLimit(nopLimit)) {
     throw new Error(
@@ -203,6 +204,7 @@ export function run(
   checkPorts(supplied, portMask);
   const toAddress = (at: LabelOrAddress) =>
     typeof at === "string" ? loaded.address(at) : at;
+  const stubs = stubsByAddress(options.stubs ?? [], toAddress);
   const ports = new SuppliedPorts(supplied, portMask);
   const cpu = createCpu(ports);
   const memory = cpu.memory;
@@ -237,22 +239,8 @@ export function run(
       memory[address] = byte;
     }
   }
-  cpu.setRegisters({ ...options.registers, sp, pc: entry });
-  cpu.setRegisters({ f: withFlags(cpu.registers().f, options.flags ?? {}) });
+  setState(cpu, { ...options.registers, sp, pc: entry }, options.flags);
 
-  const declared = options.stubs ?? [];
-  checkStubs(declared);
-  const stubs = new Map<number, Stub>();
-  for (const stub of declared) {
-    const address = toAddress(stub.at);
-    const other = stubs.get(address);
-    if (other !== undefined) {
-      throw new Error(
-        `The Stubs at ${nameOf(other.at)} and ${nameOf(stub.at)} are both at ${hex(address)}`,
-      );
-    }
-    stubs.set(address, stub);
-  }
   const stubCalls: StubCall[] = [];
   const initial = memory.slice();
   const stack = new Stack(callerSp);
@@ -265,8 +253,9 @@ export function run(
     !hasReturned(before, callerSp);
     before = cpu.registers()
   ) {
-    const stub = stubs.get(before.pc);
     const halted = cpu.internals().halted;
+    // Halted, the CPU fetches nothing at PC, so it calls no Stub there.
+    const stub = halted ? undefined : stubs.get(before.pc);
     const cost =
       stub === undefined
         ? nopsOf(memory, before, halted)
@@ -289,16 +278,14 @@ export function run(
       stubCalls.push(
         Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
       );
-      cpu.setRegisters({
-        ...stub.registers,
-        pc:
-          (memory[before.sp] ?? 0) |
-          ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8),
-        sp: (before.sp + 2) & 0xffff,
-      });
-      cpu.setRegisters({
-        f: withFlags(cpu.registers().f, stub.flags ?? {}),
-      });
+      const returnAddress =
+        (memory[before.sp] ?? 0) |
+        ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
+      setState(
+        cpu,
+        { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
+        stub.flags,
+      );
       continue;
     }
     // Halted, PC is already past the HALT, and the CPU executes no instruction of the Routine.
@@ -592,30 +579,58 @@ function nameOf(at: LabelOrAddress): string {
   return typeof at === "string" ? at : hex(at);
 }
 
-function checkStubs(stubs: readonly Stub[]): void {
-  for (const { at, registers, nops } of stubs) {
+/** The Stubs by the address PC reaches them at, once each is checked. */
+function stubsByAddress(
+  stubs: readonly Stub[],
+  toAddress: (at: LabelOrAddress) => number,
+): Map<number, Stub> {
+  const result = new Map<number, Stub>();
+  for (const stub of stubs) {
+    const { at, registers, nops } = stub;
     if (typeof at === "number" && !isAddress(at)) {
       throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
     }
     const name = nameOf(at);
-    for (const register of ["sp", "pc"]) {
-      if (registers !== undefined && register in registers) {
-        throw new Error(
-          `Register ${register} of the Stub at ${name} cannot be set: the Stub's return sets SP and PC`,
-        );
-      }
-    }
-    checkWidths(registers ?? {}, ` of the Stub at ${name}`);
+    checkRegisters(
+      registers ?? {},
+      ["sp", "pc"],
+      "the Stub's return sets SP and PC",
+      `of the Stub at ${name}`,
+    );
     if (nops !== undefined && !isNopLimit(nops)) {
       throw new Error(
         `The Stub at ${name} cannot cost ${nops} NOPs: it takes ${NOP_LIMIT_TAKES}`,
       );
     }
+    const address = toAddress(at);
+    const other = result.get(address);
+    if (other !== undefined) {
+      throw new Error(
+        `The Stubs at ${nameOf(other.at)} and ${name} are both at ${hex(address)}`,
+      );
+    }
+    result.set(address, stub);
   }
+  return result;
 }
 
-/** Fails on a register value too wide for its register; `of` names who sets it, as " of the Stub at #BB5A". */
-function checkWidths(registers: StartRegisters, of = ""): void {
+/**
+ * Fails on a register in `unsettable`, which `why` explains, or a value too wide for its register.
+ * `setter` follows the register's name in the message, as "Register a of the Stub at #BB5A".
+ */
+function checkRegisters(
+  registers: StartRegisters,
+  unsettable: readonly RegisterName[],
+  why: string,
+  setter?: string,
+): void {
+  const subject = (name: string) =>
+    setter === undefined ? `Register ${name}` : `Register ${name} ${setter}`;
+  for (const name of unsettable) {
+    if (name in registers) {
+      throw new Error(`${subject(name)} cannot be set: ${why}`);
+    }
+  }
   for (const [names, max] of [
     [WORD_REGISTERS, 0xffff],
     [BYTE_REGISTERS, 0xff],
@@ -624,11 +639,21 @@ function checkWidths(registers: StartRegisters, of = ""): void {
       const value = (registers as Partial<Registers>)[name];
       if (value !== undefined && !isWholeIn(value, 0, max)) {
         throw new Error(
-          `Register ${name}${of} cannot hold ${value}: it takes 0 to ${max}`,
+          `${subject(name)} cannot hold ${value}: it takes 0 to ${max}`,
         );
       }
     }
   }
+}
+
+/** Sets `registers`, then the `flags` over the bits of F. */
+function setState(
+  cpu: Cpu,
+  registers: Partial<Registers>,
+  flags: Partial<Flags> = {},
+): void {
+  cpu.setRegisters(registers);
+  cpu.setRegisters({ f: withFlags(cpu.registers().f, flags) });
 }
 
 function hasReturned({ pc, sp }: Registers, callerSp: number): boolean {
