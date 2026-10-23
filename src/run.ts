@@ -115,7 +115,7 @@ export function run(
     const cost = nopsOf(memory, before, halted);
     if (cost === undefined) {
       throw failure(
-        `No NOP count for the instruction ${hex(memory[before.pc] ?? 0, 2)} at ${hex(before.pc)}: prefixed instructions are not counted yet`,
+        `No NOP count for the instruction ${hex(memory[before.pc] ?? 0, 2)} at ${hex(before.pc)}`,
         before,
       );
     }

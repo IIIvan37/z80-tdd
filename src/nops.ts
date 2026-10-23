@@ -5,24 +5,40 @@ import type { Registers } from "./cpu/index.ts";
 /** The 3-bit register codes B C D E H L A; code 6, (HL), is left out. */
 const REGISTER_CODES = [0, 1, 2, 3, 4, 5, 7];
 
-/** A conditional instruction: its NOPs when its condition is met, and when it is not. */
+/**
+ * A conditional instruction: its NOPs when its condition is met, and when it is not. A repeated
+ * block instruction's condition is that it repeats.
+ */
 interface Conditional {
   readonly met: number;
   readonly notMet: number;
-  isMet(before: Registers): boolean;
+  isMet(before: Registers, memory: Uint8Array): boolean;
 }
+
+type Entry = number | Conditional;
 
 export const CALL_NOPS = 5;
 // Each step a halted CPU takes: the NOP it executes internally until an interrupt.
 const HALTED_NOPS = 1;
 
-const UNPREFIXED_NOPS: (number | Conditional)[] = new Array(256);
+const CB = 0xcb;
+const ED = 0xed;
+const INDEX_PREFIXES = [0xdd, 0xfd];
+// The core runs a chain of prefixes as one instruction. A DD or FD that another prefix follows
+// does nothing but its opcode fetch.
+const PREFIXES = [...INDEX_PREFIXES, ED];
+const IGNORED_PREFIX_NOPS = 1;
 
-function setNops(nops: number | Conditional, ...opcodes: number[]): void {
+const UNPREFIXED_NOPS: Entry[] = new Array(256);
+
+function setIn(table: Entry[], nops: Entry, ...opcodes: number[]): void {
   for (const opcode of opcodes) {
-    UNPREFIXED_NOPS[opcode] = nops;
+    table[opcode] = nops;
   }
 }
+
+const setNops = (nops: Entry, ...opcodes: number[]) =>
+  setIn(UNPREFIXED_NOPS, nops, ...opcodes);
 
 const inRegisterField = (base: number, shift: number) =>
   REGISTER_CODES.map((r) => base | (r << shift));
@@ -108,9 +124,93 @@ setNops({ met: 4, notMet: 3, isMet: ({ b }) => b !== 1 }, 0x10); // djnz n: not 
 // Input and output
 setNops(3, 0xdb, 0xd3); // in a,(n)  out (n),a
 
+// CB: rotate, shift, bit, res, set. Operand 6 is (hl).
+const CB_NOPS: number[] = Array.from({ length: 256 }, (_, op) => {
+  const isBit = op >> 6 === 1;
+  if ((op & 7) !== 6) {
+    return 2; // rlc r … srl r  bit b,r  res b,r  set b,r
+  }
+  return isBit ? 3 : 4; // bit b,(hl) : rlc (hl) … srl (hl)  res b,(hl)  set b,(hl)
+});
+
+// ED. Any opcode the core runs as a `NOP` is two opcode fetches of 4 T-states: 2 NOPs
+// (Madram's rule; he gives no value).
+const ED_NOPS: Entry[] = new Array(256).fill(2);
+
+setIn(ED_NOPS, 4, ...inBits3To5(0x40), ...inBits3To5(0x41)); // in r,(c)  out (c),r, and (c),0
+setIn(ED_NOPS, 4, ...inPairField(0x42), ...inPairField(0x4a)); // sbc hl,rr  adc hl,rr
+setIn(ED_NOPS, 6, ...inPairField(0x43), ...inPairField(0x4b)); // ld (nn),rr  ld rr,(nn)
+// neg, retn/reti, im: the undocumented copies take the time of the documented one.
+setIn(ED_NOPS, 2, ...inBits3To5(0x44)); // neg
+setIn(ED_NOPS, 4, ...inBits3To5(0x45)); // retn  reti
+setIn(ED_NOPS, 2, ...inBits3To5(0x46)); // im 0  im 1  im 2
+setIn(ED_NOPS, 3, 0x47, 0x4f, 0x57, 0x5f); // ld i,a  ld r,a  ld a,i  ld a,r
+setIn(ED_NOPS, 5, 0x67, 0x6f); // rrd  rld
+setIn(ED_NOPS, 5, 0xa0, 0xa8); // ldi  ldd
+setIn(ED_NOPS, 4, 0xa1, 0xa9); // cpi  cpd
+setIn(ED_NOPS, 5, 0xa2, 0xaa, 0xa3, 0xab); // ini  ind  outi  outd
+// Repeated: the last iteration is the one that does not repeat.
+setIn(ED_NOPS, { met: 6, notMet: 5, isMet: ({ bc }) => bc !== 1 }, 0xb0, 0xb8); // ldir  lddr
+// cpir  cpdr
+setIn(
+  ED_NOPS,
+  {
+    met: 6,
+    notMet: 4,
+    isMet: ({ a, bc, hl }, memory) => bc !== 1 && memory[hl] !== a,
+  },
+  0xb1,
+  0xb9,
+);
+// inir  indr  otir  otdr
+setIn(
+  ED_NOPS,
+  { met: 6, notMet: 5, isMet: ({ b }) => b !== 1 },
+  0xb2,
+  0xba,
+  0xb3,
+  0xbb,
+);
+
+// Behind DD or FD: "DD or FD prefix without indirection (inc ixl) adds 4 t-states (1 NOP)".
+const INDEXED_NOPS = UNPREFIXED_NOPS.map((entry) =>
+  typeof entry === "number"
+    ? entry + 1
+    : { ...entry, met: entry.met + 1, notMet: entry.notMet + 1 },
+);
+
+// With indirection, (hl) becomes (ix+n).
+setIn(INDEXED_NOPS, 5, ...inRegisterField(0x46, 3)); // ld r,(ix+n)
+setIn(INDEXED_NOPS, 5, ...inRegisterField(0x70, 0)); // ld (ix+n),r
+setIn(INDEXED_NOPS, 5, ...inBits3To5(0x86)); // alu (ix+n)
+setIn(INDEXED_NOPS, 6, 0x34, 0x35); // inc (ix+n)  dec (ix+n)
+// Missing from Madram's tables: by his rule, 4 4 3 5 3 T-states (Z80 user manual).
+setIn(INDEXED_NOPS, 6, 0x36); // ld (ix+n),n
+
+// DDCB, FDCB: bit b,(ix+n), and every other operation on (ix+n), with or without its copy to r.
+const INDEXED_CB_NOPS: number[] = Array.from({ length: 256 }, (_, op) =>
+  op >> 6 === 1 ? 6 : 7,
+);
+
+function entryAt(memory: Uint8Array, pc: number): Entry | undefined {
+  const at = (offset: number) => memory[(pc + offset) & 0xffff] ?? 0;
+  if (at(0) === CB) {
+    return CB_NOPS[at(1)];
+  }
+  if (at(0) === ED) {
+    return ED_NOPS[at(1)];
+  }
+  if (INDEX_PREFIXES.includes(at(0))) {
+    // DD CB n op: the displacement comes before the opcode.
+    return at(1) === CB ? INDEXED_CB_NOPS[at(3)] : INDEXED_NOPS[at(1)];
+  }
+  return UNPREFIXED_NOPS[at(0)];
+}
+
 /**
  * The CPC duration, in NOPs, of the next step from the state `before`: the instruction at PC,
- * or, if the CPU is `halted`, the NOP it executes internally. Undefined if the table has no count.
+ * or, if the CPU is `halted`, the `NOP` it executes internally. Every opcode has a count; undefined
+ * would mean a gap in the tables, which the Run reports rather than count zero.
  */
 export function nopsOf(
   memory: Uint8Array,
@@ -120,9 +220,24 @@ export function nopsOf(
   if (halted) {
     return HALTED_NOPS;
   }
-  const entry = UNPREFIXED_NOPS[memory[before.pc] ?? 0];
-  if (entry === undefined || typeof entry === "number") {
-    return entry;
+  let pc = before.pc;
+  let ignoredPrefixes = 0;
+  while (
+    INDEX_PREFIXES.includes(memory[pc] ?? 0) &&
+    PREFIXES.includes(memory[(pc + 1) & 0xffff] ?? 0)
+  ) {
+    ignoredPrefixes += 1;
+    pc = (pc + 1) & 0xffff;
   }
-  return entry.isMet(before) ? entry.met : entry.notMet;
+  const entry = entryAt(memory, pc);
+  if (entry === undefined) {
+    return undefined;
+  }
+  const nops =
+    typeof entry === "number"
+      ? entry
+      : entry.isMet(before, memory)
+        ? entry.met
+        : entry.notMet;
+  return ignoredPrefixes * IGNORED_PREFIX_NOPS + nops;
 }

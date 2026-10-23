@@ -382,7 +382,7 @@ const each = (
 const withRegisterIn = (base: number, shift: number) =>
   REGISTER_CODES.map((r) => base | (r << shift));
 const withPairIn = (base: number) => [0, 1, 2, 3].map((rr) => base | (rr << 4));
-const withAluIn = (base: number) =>
+const withBits3To5In = (base: number) =>
   [0, 1, 2, 3, 4, 5, 6, 7].map((op) => base | (op << 3));
 
 const LD_R_R = REGISTER_CODES.flatMap((to) =>
@@ -415,11 +415,11 @@ const FIXED_TIMINGS: readonly TimingCase[] = [
   ...each("ld (hl),r", withRegisterIn(0x70, 0), 2 + RET_NOPS),
   ...each(
     "alu r",
-    withAluIn(0x80).flatMap((op) => withRegisterIn(op, 0)),
+    withBits3To5In(0x80).flatMap((op) => withRegisterIn(op, 0)),
     1 + RET_NOPS,
   ),
-  ...each("alu (hl)", withAluIn(0x86), 2 + RET_NOPS),
-  ...each("alu n", withAluIn(0xc6), 2 + RET_NOPS, [0x12]),
+  ...each("alu (hl)", withBits3To5In(0x86), 2 + RET_NOPS),
+  ...each("alu n", withBits3To5In(0xc6), 2 + RET_NOPS, [0x12]),
   ...[0xc5, 0xd5, 0xe5, 0xf5].map((push) => ({
     name: `push qq, pop qq (#${push.toString(16).toUpperCase()})`,
     code: [push, push - 4],
@@ -427,7 +427,7 @@ const FIXED_TIMINGS: readonly TimingCase[] = [
   })),
   ...each("jp nn", [0xc3], 3 + RET_NOPS, TARGET),
   ...each("call nn", [0xcd], 5 + RET_NOPS + RET_NOPS, TARGET),
-  ...each("rst p", withAluIn(0xc7), 4 + RET_NOPS + RET_NOPS),
+  ...each("rst p", withBits3To5In(0xc7), 4 + RET_NOPS + RET_NOPS),
   ...each("out (n),a / in a,(n)", [0xd3, 0xdb], 3 + RET_NOPS, [0x12]),
   ...each("exx / ex de,hl / di / ei", [0xd9, 0xeb, 0xf3, 0xfb], 1 + RET_NOPS),
   {
@@ -531,39 +531,435 @@ function loadTimingCase(code: readonly number[]) {
   });
 }
 
+async function runsInItsNops(timing: TimingCase) {
+  const program = await loadTimingCase(timing.code);
+
+  const run = program.run("code", timing);
+
+  expect(run.nops).toBe(timing.nops);
+}
+
 describe("the NOPs of an unprefixed instruction", () => {
   it.each([...FIXED_TIMINGS, ...CONDITIONAL_TIMINGS])(
     "runs $name in $nops NOPs, RET included",
-    async (timing) => {
-      const program = await loadTimingCase(timing.code);
-
-      const run = program.run("code", timing);
-
-      expect(run.nops).toBe(timing.nops);
-    },
+    runsInItsNops,
   );
 });
 
-describe("a Run reaching a prefixed instruction", () => {
-  it.each(["CB", "DD", "ED", "FD"])(
-    "fails, naming the prefix #%s and its address, rather than count zero",
-    async (prefix) => {
-      const program = await loadTimingCase([NOP, Number(`0x${prefix}`), 0x00]);
+const hexBytes = (bytes: readonly number[]) =>
+  bytes
+    .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
+    .join("");
 
-      expect(() => program.run("code")).toThrow(
-        new RegExp(`#${prefix}.*#4001`),
-      );
-    },
-  );
+// Keep memory accesses and block instructions away from the code.
+const POINTERS: StartRegisters = { bc: 0x0005, de: 0x7000, hl: 0x6000 };
 
-  it("fails with the failure report", async () => {
-    const program = await loadTimingCase([NOP, 0xcb, 0x00]);
+// Like `each`, for opcodes behind the `prefix` bytes.
+const eachPrefixed = (
+  name: string,
+  prefix: readonly number[],
+  opcodes: readonly number[],
+  nops: number,
+  operands: readonly number[] = [],
+): TimingCase[] =>
+  opcodes.map((opcode) => ({
+    name: `${name} (#${hexBytes([...prefix, opcode])})`,
+    code: [...prefix, opcode, ...operands],
+    nops,
+    registers: POINTERS,
+  }));
 
-    const failure = () => program.run("code", { registers: { bc: 0x1234 } });
+const CB = [0xcb];
 
-    expect(failure).toThrow(/#4000 +code +NOP\n/);
-    expect(failure).toThrow(/BC #1234/);
+const CB_TIMINGS: readonly TimingCase[] = [
+  ...eachPrefixed(
+    "rlc rrc rl rr sla sra sl1 srl r",
+    CB,
+    withBits3To5In(0x00).flatMap((op) => withRegisterIn(op, 0)),
+    2 + RET_NOPS,
+  ),
+  ...eachPrefixed(
+    "rlc rrc rl rr sla sra sl1 srl (hl)",
+    CB,
+    withBits3To5In(0x06),
+    4 + RET_NOPS,
+  ),
+  ...eachPrefixed(
+    "bit b,r",
+    CB,
+    withBits3To5In(0x40).flatMap((op) => withRegisterIn(op, 0)),
+    2 + RET_NOPS,
+  ),
+  ...eachPrefixed("bit b,(hl)", CB, withBits3To5In(0x46), 3 + RET_NOPS),
+  ...eachPrefixed(
+    "res b,r / set b,r",
+    CB,
+    [...withBits3To5In(0x80), ...withBits3To5In(0xc0)].flatMap((op) =>
+      withRegisterIn(op, 0),
+    ),
+    2 + RET_NOPS,
+  ),
+  ...eachPrefixed(
+    "res b,(hl) / set b,(hl)",
+    CB,
+    [...withBits3To5In(0x86), ...withBits3To5In(0xc6)],
+    4 + RET_NOPS,
+  ),
+];
+
+describe("the NOPs of a CB instruction", () => {
+  it("covers every opcode of the CB table", () => {
+    const opcodes = new Set(CB_TIMINGS.map(({ code }) => code[1]));
+
+    expect(opcodes.size).toBe(256);
   });
+
+  it.each(CB_TIMINGS)("runs $name in $nops NOPs, RET included", runsInItsNops);
+});
+
+const ED = [0xed];
+const BLOCK_SLOTS = [0xa0, 0xa8, 0xb0, 0xb8].flatMap((row) =>
+  [0, 1, 2, 3].map((column) => row | column),
+);
+// Madram gives no value for these: like any ED opcode the core runs as a `NOP`, they are two
+// opcode fetches of 4 T-states, so 2 NOPs by the rule of his "Timing" section.
+const UNDEFINED_ED = Array.from({ length: 256 }, (_, op) => op).filter(
+  (op) =>
+    op < 0x40 ||
+    op >= 0xc0 ||
+    op === 0x77 ||
+    op === 0x7f ||
+    (op >= 0x80 && !BLOCK_SLOTS.includes(op)),
+);
+
+const ED_TIMINGS: readonly TimingCase[] = [
+  ...eachPrefixed(
+    "in r,(c) / in 0,(c)",
+    ED,
+    withBits3To5In(0x40),
+    4 + RET_NOPS,
+  ),
+  ...eachPrefixed(
+    "out (c),r / out (c),0",
+    ED,
+    withBits3To5In(0x41),
+    4 + RET_NOPS,
+  ),
+  ...eachPrefixed("sbc hl,rr", ED, withPairIn(0x42), 4 + RET_NOPS),
+  ...eachPrefixed("adc hl,rr", ED, withPairIn(0x4a), 4 + RET_NOPS),
+  ...eachPrefixed(
+    "ld (nn),rr",
+    ED,
+    withPairIn(0x43),
+    6 + RET_NOPS,
+    [0x00, 0x60],
+  ),
+  ...eachPrefixed(
+    "ld rr,(nn)",
+    ED,
+    [0x4b, 0x5b, 0x6b],
+    6 + RET_NOPS,
+    [0x00, 0x60],
+  ),
+  {
+    name: "ld (nn),sp, ld sp,(nn) (#ED73, #ED7B)",
+    code: [0xed, 0x73, 0x00, 0x60, 0xed, 0x7b, 0x00, 0x60],
+    nops: 6 + 6 + RET_NOPS,
+  },
+  // The undocumented copies of neg, retn and im take the time of the documented one.
+  ...eachPrefixed("neg", ED, withBits3To5In(0x44), 2 + RET_NOPS),
+  ...eachPrefixed(
+    "retn / reti, returning to the caller",
+    ED,
+    withBits3To5In(0x45),
+    4,
+  ),
+  ...eachPrefixed("im 0 / im 1 / im 2", ED, withBits3To5In(0x46), 2 + RET_NOPS),
+  ...eachPrefixed(
+    "ld i,a / ld r,a / ld a,i / ld a,r",
+    ED,
+    [0x47, 0x4f, 0x57, 0x5f],
+    3 + RET_NOPS,
+  ),
+  ...eachPrefixed("rrd / rld", ED, [0x67, 0x6f], 5 + RET_NOPS),
+  ...eachPrefixed("ldi / ldd", ED, [0xa0, 0xa8], 5 + RET_NOPS),
+  ...eachPrefixed("cpi / cpd", ED, [0xa1, 0xa9], 4 + RET_NOPS),
+  ...eachPrefixed(
+    "ini / ind / outi / outd",
+    ED,
+    [0xa2, 0xaa, 0xa3, 0xab],
+    5 + RET_NOPS,
+  ),
+  ...eachPrefixed("undefined, run as NOP", ED, UNDEFINED_ED, 2 + RET_NOPS),
+];
+
+describe("the NOPs of an ED instruction", () => {
+  it("covers every opcode of the ED table, the repeated ones apart", () => {
+    const opcodes = new Set(
+      ED_TIMINGS.flatMap(({ code }) =>
+        code.filter((_, i) => code[i - 1] === 0xed),
+      ),
+    );
+
+    expect(opcodes.size).toBe(256 - 8);
+  });
+
+  it.each(ED_TIMINGS)("runs $name in $nops NOPs, RET included", runsInItsNops);
+});
+
+// Madram gives these as free text: "6 / 5 for last iteration", "6 / 4 for last iteration".
+// RAM at HL is zero.
+const repeated = (
+  name: string,
+  opcode: number,
+  registers: StartRegisters,
+  nops: number,
+): TimingCase => ({
+  name: `${name} (#${hexBytes([0xed, opcode])})`,
+  code: [0xed, opcode],
+  nops: nops + RET_NOPS,
+  registers: { ...POINTERS, ...registers },
+});
+
+const REPEATED_TIMINGS: readonly TimingCase[] = [
+  ...(
+    [
+      ["ldir", 0xb0],
+      ["lddr", 0xb8],
+    ] as const
+  ).flatMap(([name, opcode]) => [
+    repeated(`${name}, BC 3`, opcode, { bc: 3 }, 6 + 6 + 5),
+    repeated(`${name}, BC 1`, opcode, { bc: 1 }, 5),
+  ]),
+  ...(
+    [
+      ["cpir", 0xb1],
+      ["cpdr", 0xb9],
+    ] as const
+  ).flatMap(([name, opcode]) => [
+    repeated(`${name}, BC 3, no match`, opcode, { bc: 3, a: 1 }, 6 + 6 + 4),
+    repeated(`${name}, BC 3, match first`, opcode, { bc: 3, a: 0 }, 4),
+    repeated(`${name}, BC 1, no match`, opcode, { bc: 1, a: 1 }, 4),
+  ]),
+  ...(
+    [
+      ["inir", 0xb2],
+      ["indr", 0xba],
+      ["otir", 0xb3],
+      ["otdr", 0xbb],
+    ] as const
+  ).flatMap(([name, opcode]) => [
+    repeated(`${name}, B 3`, opcode, { b: 3 }, 6 + 6 + 5),
+    repeated(`${name}, B 1`, opcode, { b: 1 }, 5),
+  ]),
+];
+
+describe("the NOPs of a repeated block instruction", () => {
+  it.each(REPEATED_TIMINGS)(
+    "runs $name in $nops NOPs, RET included",
+    runsInItsNops,
+  );
+});
+
+// Behind DD or FD, (hl) becomes (ix+n), and jp (hl), ld sp,hl and ex (sp),hl use IX: these
+// opcodes get cases of their own.
+const CHANGED_BY_INDEX = new Set([
+  0x34,
+  0x35,
+  0x36,
+  ...withRegisterIn(0x46, 3),
+  ...withRegisterIn(0x70, 0),
+  ...withBits3To5In(0x86),
+  0xe9,
+  0xf9,
+  0xe3,
+]);
+
+const INDEX_PREFIXES = [
+  ["ix", 0xdd],
+  ["iy", 0xfd],
+] as const;
+
+// Madram: "DD or FD prefix without indirection (inc ixl) adds 4 t-states (1 NOP)".
+const INDEXED_TIMINGS: readonly TimingCase[] = INDEX_PREFIXES.flatMap(
+  ([index, prefix]) =>
+    [...FIXED_TIMINGS, ...CONDITIONAL_TIMINGS]
+      .filter(({ code }) => !CHANGED_BY_INDEX.has(code[0] ?? 0))
+      .map((timing) => ({
+        ...timing,
+        name: `${index} prefix on ${timing.name}`,
+        code: [prefix, ...timing.code],
+        nops: timing.nops + 1,
+      })),
+);
+
+const INDEX_REGISTER_TIMINGS: readonly TimingCase[] = INDEX_PREFIXES.flatMap(
+  ([index, prefix]) => [
+    // Madram's own rows, apart from the rule above.
+    {
+      name: `ld ${index},nn`,
+      code: [prefix, 0x21, 0x00, 0x50],
+      nops: 4 + RET_NOPS,
+    },
+    {
+      name: `ld ${index},(nn), ld (nn),${index}`,
+      code: [prefix, 0x2a, 0x00, 0x60, prefix, 0x22, 0x00, 0x60],
+      nops: 6 + 6 + RET_NOPS,
+    },
+    {
+      name: `push ${index}, pop ${index}`,
+      code: [prefix, 0xe5, prefix, 0xe1],
+      nops: 5 + 4 + RET_NOPS,
+    },
+    ...withPairIn(0x09).map((opcode) => ({
+      name: `add ${index},rr (#${hexBytes([prefix, opcode])})`,
+      code: [prefix, opcode],
+      nops: 4 + RET_NOPS,
+    })),
+    {
+      name: `inc ${index}, dec ${index}`,
+      code: [prefix, 0x23, prefix, 0x2b],
+      nops: 3 + 3 + RET_NOPS,
+    },
+    {
+      name: `jp (${index})`,
+      code: [prefix, 0xe9],
+      nops: 2 + RET_NOPS,
+      registers: { [index]: 0x5000 },
+    },
+    {
+      name: `ld sp,${index}`,
+      code: [prefix, 0xf9],
+      nops: 3 + RET_NOPS,
+      registers: { [index]: 0xbffe },
+    },
+    {
+      name: `ex (sp),${index}, ex (sp),${index}`,
+      code: [prefix, 0xe3, prefix, 0xe3],
+      nops: 7 + 7 + RET_NOPS,
+    },
+  ],
+);
+
+const DISPLACEMENT = 0x05;
+
+const INDIRECT_TIMINGS: readonly TimingCase[] = INDEX_PREFIXES.flatMap(
+  ([index, prefix]) => {
+    const indirect = (
+      name: string,
+      opcodes: readonly number[],
+      nops: number,
+      operands: readonly number[] = [],
+    ): TimingCase[] =>
+      opcodes.map((opcode) => ({
+        name: `${name.replaceAll("ix", index)} (#${hexBytes([prefix, opcode])})`,
+        code: [prefix, opcode, DISPLACEMENT, ...operands],
+        nops: nops + RET_NOPS,
+        registers: { [index]: 0x6000 },
+      }));
+    return [
+      ...indirect("ld r,(ix+n)", withRegisterIn(0x46, 3), 5),
+      ...indirect("ld (ix+n),r", withRegisterIn(0x70, 0), 5),
+      ...indirect("alu (ix+n)", withBits3To5In(0x86), 5),
+      ...indirect("inc (ix+n) / dec (ix+n)", [0x34, 0x35], 6),
+      // Missing from Madram's tables. By his rule, from the machine cycles of the Z80 user
+      // manual (UM0080), 4 4 3 5 3 T-states: 1 + 1 + 1 + 2 + 1 = 6 NOPs.
+      ...indirect("ld (ix+n),n", [0x36], 6, [0x12]),
+    ];
+  },
+);
+
+// The displacement comes before the opcode. Madram lists the undocumented `rlc (ix+n),r`,
+// `res b,(ix+n),r` and `set b,(ix+n),r` at 7 NOPs; the core runs an undocumented `bit` as
+// `bit b,(ix+n)`.
+const INDEXED_CB_TIMINGS: readonly TimingCase[] = INDEX_PREFIXES.flatMap(
+  ([index, prefix]) => {
+    const indexedCb = (
+      name: string,
+      opcodes: readonly number[],
+      nops: number,
+    ): TimingCase[] =>
+      opcodes.map((opcode) => ({
+        name: `${name.replaceAll("ix", index)} (#${hexBytes([prefix, 0xcb, DISPLACEMENT, opcode])})`,
+        code: [prefix, 0xcb, DISPLACEMENT, opcode],
+        nops: nops + RET_NOPS,
+        registers: { [index]: 0x6000 },
+      }));
+    const everyOperand = (bases: readonly number[]) =>
+      bases.flatMap((base) => [0, 1, 2, 3, 4, 5, 6, 7].map((r) => base | r));
+    return [
+      ...indexedCb("bit b,(ix+n)", everyOperand(withBits3To5In(0x40)), 6),
+      ...indexedCb(
+        "rlc … srl (ix+n), and with r",
+        everyOperand(withBits3To5In(0x00)),
+        7,
+      ),
+      ...indexedCb(
+        "res b,(ix+n) / set b,(ix+n), and with r",
+        everyOperand([...withBits3To5In(0x80), ...withBits3To5In(0xc0)]),
+        7,
+      ),
+    ];
+  },
+);
+
+describe("the NOPs of a DDCB or FDCB instruction", () => {
+  it("covers every opcode of the DDCB and FDCB tables", () => {
+    const opcodes = new Set(
+      INDEXED_CB_TIMINGS.map(({ code }) =>
+        hexBytes([code[0] ?? 0, code[3] ?? 0]),
+      ),
+    );
+
+    expect(opcodes.size).toBe(2 * 256);
+  });
+
+  it.each(INDEXED_CB_TIMINGS)(
+    "runs $name in $nops NOPs, RET included",
+    runsInItsNops,
+  );
+});
+
+// cell80 runs a chain of prefixes as one instruction. A DD or FD that another prefix follows
+// does nothing but its opcode fetch, 4 T-states: 1 NOP more, as Madram's rule gives.
+const PREFIX_CHAIN_TIMINGS: readonly TimingCase[] = [
+  {
+    name: "ld ix,nn behind another DD (#DDDD21)",
+    code: [0xdd, 0xdd, 0x21, 0x00, 0x50],
+    nops: 1 + 4 + RET_NOPS,
+  },
+  {
+    name: "ld ix,nn behind an FD (#FDDD21)",
+    code: [0xfd, 0xdd, 0x21, 0x00, 0x50],
+    nops: 1 + 4 + RET_NOPS,
+  },
+  {
+    name: "neg behind a DD (#DDED44)",
+    code: [0xdd, 0xed, 0x44],
+    nops: 1 + 2 + RET_NOPS,
+  },
+  {
+    // Repeating moves PC back 2 bytes, to ED: only the first iteration pays for the FD.
+    name: "ldir behind an FD, BC 3 (#FDEDB0)",
+    code: [0xfd, 0xed, 0xb0],
+    nops: 1 + 6 + 6 + 5 + RET_NOPS,
+    registers: { ...POINTERS, bc: 3 },
+  },
+  {
+    name: "set 0,(iy+n) behind a DD (#DDFDCB05C6)",
+    code: [0xdd, 0xfd, 0xcb, DISPLACEMENT, 0xc6],
+    nops: 1 + 7 + RET_NOPS,
+    registers: { iy: 0x6000 },
+  },
+];
+
+describe("the NOPs of an instruction behind an IX or IY prefix", () => {
+  it.each([
+    ...INDEXED_TIMINGS,
+    ...INDEX_REGISTER_TIMINGS,
+    ...INDIRECT_TIMINGS,
+    ...PREFIX_CHAIN_TIMINGS,
+  ])("runs $name in $nops NOPs, RET included", runsInItsNops);
 });
 
 const JR_N = 0x18;
@@ -608,7 +1004,7 @@ describe("a Run stuck on HALT", () => {
   // Each step on HALT, then halted, is one M1 cycle: R goes up by one per NOP.
   it("counts the HALT, then 1 NOP per step halted, until the limit", async () => {
     const program = await load({
-      blocks: [{ address: 0x4000, bytes: [HALT, 0xcb] }],
+      blocks: [{ address: 0x4000, bytes: [HALT] }],
       symbols: { wait: 0x4000 },
     });
 
@@ -617,6 +1013,16 @@ describe("a Run stuck on HALT", () => {
     expect(failure).toThrow(/NOP limit of 100 NOPs/);
     expect(failure).toThrow(/R #64/);
     expect(failure).toThrow(/#4000 +wait +HALT\n\n/);
+  });
+
+  // An IX prefix adds 1 NOP and one M1 cycle: R reaches #64 after 100 NOPs all the same.
+  it("counts a HALT behind an IX prefix as 2 NOPs", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [0xdd, HALT] }],
+      symbols: { wait: 0x4000 },
+    });
+
+    expect(() => program.run("wait", { nopLimit: 100 })).toThrow(/R #64/);
   });
 
   // A million steps, the slowest a Run can take to reach the default limit.
