@@ -27,6 +27,14 @@ function load(assembly: Assembly) {
   });
 }
 
+// A Routine that returns at once, for the checks made before the first step.
+function loadNothing() {
+  return load({
+    blocks: [{ address: 0x4000, bytes: [RET] }],
+    symbols: { nothing: 0x4000 },
+  });
+}
+
 describe("the Port writes of a Run", () => {
   it("records OUT (n),A with A as the high byte of the port address", async () => {
     const program = await load({
@@ -229,10 +237,7 @@ describe("the Port reads of a Run", () => {
   });
 
   it("refuses a port mask wider than 16 bits", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4000, bytes: [RET] }],
-      symbols: { nothing: 0x4000 },
-    });
+    const program = await loadNothing();
 
     expect(() => program.run("nothing", { portMask: 0x10000 })).toThrow(
       /^The port mask cannot be 65536: it takes #0000 to #FFFF$/,
@@ -240,10 +245,7 @@ describe("the Port reads of a Run", () => {
   });
 
   it("refuses a port with bits outside the port mask, which no Port read would match", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4000, bytes: [RET] }],
-      symbols: { nothing: 0x4000 },
-    });
+    const program = await loadNothing();
 
     expect(() => program.run("nothing", { ports: { 0xfb7f: [0x42] } })).toThrow(
       /^The port #FB7F has bits outside the port mask #FF00, so no Port read would match it$/,
@@ -251,10 +253,7 @@ describe("the Port reads of a Run", () => {
   });
 
   it("refuses a value a port could not return, naming the port", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4000, bytes: [RET] }],
-      symbols: { nothing: 0x4000 },
-    });
+    const program = await loadNothing();
 
     expect(() =>
       program.run("nothing", { ports: { 0xf500: [0x00, 0x100] } }),
@@ -307,10 +306,7 @@ describe("the Port reads of a Run", () => {
     ["65536", 0x10000],
     ["NaN", Number.NaN],
   ])("refuses the port %s, which is not an address", async (shown, port) => {
-    const program = await load({
-      blocks: [{ address: 0x4000, bytes: [RET] }],
-      symbols: { nothing: 0x4000 },
-    });
+    const program = await loadNothing();
 
     expect(() =>
       program.run("nothing", { portMask: 0xffff, ports: { [port]: [0] } }),
@@ -318,10 +314,7 @@ describe("the Port reads of a Run", () => {
   });
 
   it("refuses a port given neither values nor a function", async () => {
-    const program = await load({
-      blocks: [{ address: 0x4000, bytes: [RET] }],
-      symbols: { nothing: 0x4000 },
-    });
+    const program = await loadNothing();
 
     expect(() =>
       // @ts-expect-error: a single value instead of a list

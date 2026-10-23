@@ -8,4 +8,4 @@ A Port read looks up what the test supplied under its port address ANDed with th
 - A port the test supplies with bits outside the mask fails the Run before the first step, since no Port read would match it.
 - Every address under one key shares its sequence: `INIR` decrements B on each iteration, so its reads move from `#F5xx` to `#F4xx` and change key.
 - Port writes are not decoded: each keeps its full 16-bit address.
-- A test keys its ports in hexadecimal, as `0xf500`, so `biome.json` turns off Biome's `useSimpleNumberKeys`, which would have them in decimal.
+- A test keys its ports in hexadecimal, as `0xf500`, so `biome.json` turns off Biome's `useSimpleNumberKeys` in test files, where it would have them in decimal.

@@ -131,6 +131,8 @@ export function isAddress(value: unknown): value is number {
   return isWholeIn(value, 0, 0xffff);
 }
 
+const BYTE_TAKES = "0 to 255";
+
 function isByte(value: unknown): value is number {
   return isWholeIn(value, 0, 0xff);
 }
@@ -194,7 +196,7 @@ export function run(
       const address = (start + i) & 0xffff;
       if (!isByte(byte)) {
         throw new Error(
-          `The byte at ${hex(address)} cannot be ${byte}: it takes 0 to 255`,
+          `The byte at ${hex(address)} cannot be ${byte}: it takes ${BYTE_TAKES}`,
         );
       }
       if (returnAddressAt.includes(address)) {
@@ -239,9 +241,13 @@ export function run(
     if (!halted) {
       history.record(memory, before.pc);
     }
-    cpu.step();
-    if (ports.refusal !== undefined) {
-      const { address, key, why, cause } = ports.refusal;
+    try {
+      cpu.step();
+    } catch (error) {
+      if (!(error instanceof PortRefusal)) {
+        throw error;
+      }
+      const { address, key, why, cause } = error;
       throw failure(
         `The Routine read port ${hex(address)} (key ${hex(key)}) at ${hex(before.pc)}, ${why}`,
         before,
@@ -318,8 +324,8 @@ function changes(initial: Uint8Array, final: Uint8Array): MemoryChange[] {
 /** The ports of a Run: what the test supplied for each Port read, and the Port writes. */
 class SuppliedPorts implements Ports {
   readonly writes: PortWrite[] = [];
-  /** Why a Port read failed; the Run fails once the IN has stepped, with the registers before it. */
-  refusal: Refusal | undefined;
+  // The writes a port function sees, copied once per run of reads with no OUT between them.
+  private snapshot: readonly PortWrite[] | undefined;
   // How many values of each key's sequence the Routine has read.
   private readonly counts = new Map<number, number>();
 
@@ -329,63 +335,76 @@ class SuppliedPorts implements Ports {
   ) {}
 
   read(address: number): number {
-    const values = this.supplied[address & this.mask];
+    const key = address & this.mask;
+    const values = this.supplied[key];
     if (values === undefined) {
-      return this.refuse(address, "which the test did not supply");
+      throw new PortRefusal(address, key, "which the test did not supply");
     }
     return typeof values === "function"
-      ? this.compute(values, address)
-      : this.next(values, address);
+      ? this.compute(values, address, key)
+      : this.next(values, address, key);
   }
 
   write(address: number, value: number): void {
     this.writes.push(Object.freeze({ address, value }));
+    this.snapshot = undefined;
   }
 
-  private compute(compute: PortFunction, address: number): number {
+  private compute(compute: PortFunction, address: number, key: number): number {
+    this.snapshot ??= Object.freeze(this.writes.slice());
     let value: number;
     try {
-      value = compute({ address, writes: Object.freeze(this.writes.slice()) });
+      value = compute({ address, writes: this.snapshot });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : cause;
-      return this.refuse(address, `whose function failed: ${message}`, cause);
+      throw new PortRefusal(
+        address,
+        key,
+        `whose function failed: ${message}`,
+        cause,
+      );
     }
-    return isByte(value)
-      ? value
-      : this.refuse(
-          address,
-          `whose function returned ${value}: it takes 0 to 255`,
-        );
+    if (!isByte(value)) {
+      throw new PortRefusal(
+        address,
+        key,
+        `whose function returned ${value}: it takes ${BYTE_TAKES}`,
+      );
+    }
+    return value;
   }
 
-  private next(values: readonly number[], address: number): number {
-    const key = address & this.mask;
+  private next(
+    values: readonly number[],
+    address: number,
+    key: number,
+  ): number {
     const count = this.counts.get(key) ?? 0;
     const value = values[count];
     if (value === undefined) {
       const plural = values.length === 1 ? "" : "s";
-      return this.refuse(
+      throw new PortRefusal(
         address,
+        key,
         `past the end of its ${values.length} value${plural}`,
       );
     }
     this.counts.set(key, count + 1);
     return value;
   }
-
-  // The CPU reads #FF in place of the refused value; the Run fails before it goes on.
-  private refuse(address: number, why: string, cause?: unknown): number {
-    this.refusal = { address, key: address & this.mask, why, cause };
-    return 0xff;
-  }
 }
 
-interface Refusal {
-  readonly address: number;
-  readonly key: number;
-  /** Ends the reason of the failure: "which the test did not supply"… */
-  readonly why: string;
-  readonly cause: unknown;
+/** A Port read the test did not supply, thrown out of the CPU's step for the Run to fail on. */
+class PortRefusal extends Error {
+  constructor(
+    readonly address: number,
+    readonly key: number,
+    /** Ends the reason of the failure: "which the test did not supply"… */
+    readonly why: string,
+    cause?: unknown,
+  ) {
+    super(why, { cause });
+  }
 }
 
 const REPORTED_REGISTERS: readonly (readonly [string, keyof Registers])[][] = [
@@ -491,7 +510,7 @@ function checkPorts(
       for (const value of values) {
         if (!isByte(value)) {
           throw new Error(
-            `A value read at port ${hex(port)} cannot be ${value}: it takes 0 to 255`,
+            `A value read at port ${hex(port)} cannot be ${value}: it takes ${BYTE_TAKES}`,
           );
         }
       }
