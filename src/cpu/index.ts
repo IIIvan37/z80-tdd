@@ -23,5 +23,6 @@ export {
   flagsOf,
   registerHex,
   registerLabel,
+  registerText,
   withFlags,
 } from "./registers.ts";

@@ -7,6 +7,7 @@ import {
   type Registers,
   registerHex,
   registerLabel,
+  registerText,
 } from "./cpu/index.ts";
 import type { MemoryRange } from "./program.ts";
 import type { MemoryChange, Run } from "./run.ts";
@@ -61,7 +62,7 @@ export const runMatchers = {
         ([name, value]) =>
           `  ${registerLabel(name).padEnd(width)}  expected ${registerHex(name, value)}, received ${registerHex(name, run.registers[name])}`,
       ),
-      `Registers match: ${expectations.map(([name, value]) => `${registerLabel(name)} ${registerHex(name, value)}`).join(", ")}`,
+      `Registers match: ${expectations.map(([name, value]) => registerText(name, value)).join(", ")}`,
       "Registers differ:",
     );
   },

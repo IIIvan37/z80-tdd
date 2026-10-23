@@ -13,8 +13,7 @@ import {
   type Ports,
   type RegisterName,
   type Registers,
-  registerHex,
-  registerLabel,
+  registerText,
   withFlags,
 } from "./cpu/index.ts";
 import {
@@ -143,7 +142,8 @@ export function run(
   options: RunOptions = {},
 ): Run {
   checkRegisters(options.registers ?? {}, {
-    unsettable: { names: ["pc"], why: "the Run starts at the entry label" },
+    unsettable: ["pc"],
+    why: "the Run starts at the entry label",
   });
   const nopLimit = options.nopLimit ?? loaded.nopLimit;
   if (!isNopLimit(nopLimit)) {
@@ -474,8 +474,7 @@ function report(
   history: readonly string[],
   registers: Registers,
 ): string {
-  const cell = (name: RegisterName) =>
-    `${registerLabel(name)} ${registerHex(name, registers[name])}`;
+  const cell = (name: RegisterName) => registerText(name, registers[name]);
   const lines = REPORTED_REGISTERS.map(
     (row) => `  ${row.map(cell).join("  ")}`,
   );
@@ -539,10 +538,8 @@ function stubsByAddress(
     const name = nameOf(at);
     checkRegisters(registers ?? {}, {
       setter: `of the Stub at ${name}`,
-      unsettable: {
-        names: ["sp", "pc"],
-        why: "the Stub's return sets SP and PC",
-      },
+      unsettable: ["sp", "pc"],
+      why: "the Stub's return sets SP and PC",
     });
     if (nops !== undefined && !isNopLimit(nops)) {
       throw new Error(
