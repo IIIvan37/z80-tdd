@@ -210,13 +210,9 @@ export function run(
     if (!halted) {
       history.record(memory, before.pc);
     }
-    try {
-      cpu.step();
-    } catch (error) {
-      if (!(error instanceof PortRefusal)) {
-        throw error;
-      }
-      const { address, key, why, cause } = error;
+    const refusal = step(cpu);
+    if (refusal !== undefined) {
+      const { address, key, why, cause } = refusal;
       throw failure(
         `The Routine read port ${hex(address)} (key ${hex(key)}) at ${hex(before.pc)}, ${why}`,
         before,
@@ -549,6 +545,19 @@ function report(
     "Registers:",
     ...lines,
   ].join("\n");
+}
+
+/** Executes one step of `cpu`; gives the Port read the test refused during it, if any. */
+function step(cpu: Cpu): PortRefusal | undefined {
+  try {
+    cpu.step();
+    return undefined;
+  } catch (error) {
+    if (error instanceof PortRefusal) {
+      return error;
+    }
+    throw error;
+  }
 }
 
 /** Writes the sentinel return address at `sp` and gives where; fails if it would overwrite the Program. */
