@@ -28,6 +28,10 @@ _Avoid_: Build, binary, image
 One byte whose value after a **Run** differs from its value before, given by address, old value and new value.
 _Avoid_: Diff, side effect
 
+**Matcher**:
+A Vitest assertion on a **Run** that the tool adds to `expect`, such as "only this range changed", whose failure message shows the state at fault.
+_Avoid_: Assertion helper, checker
+
 **NOP**:
 The CPC unit of time, one microsecond, in which the duration of a **Run** is counted; the Z80 instruction of the same name is only ever written as code, `NOP`.
 _Avoid_: Cycle, T-state, tick

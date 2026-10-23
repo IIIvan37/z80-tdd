@@ -33,9 +33,10 @@ module.exports = {
     },
     {
       name: "test-at-top-imports-only-its-module",
-      comment: "A test beside a file module imports only that file.",
+      comment:
+        "A test beside a file module imports only that file; `<module>.<topic>.test.ts` tests `<module>.ts`.",
       severity: "error",
-      from: { path: "^src/([^/]+)\\.test\\.ts$" },
+      from: { path: "^src/([^/.]+)[^/]*\\.test\\.ts$" },
       to: { path: "^src/", pathNot: "^src/$1\\.ts$" },
     },
     {

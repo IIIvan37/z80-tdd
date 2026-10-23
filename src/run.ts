@@ -49,6 +49,16 @@ export interface RunOptions {
   readonly flags?: Partial<Flags>;
   /** The longest the Run may last, in NOPs; 1,000,000 by default. */
   readonly nopLimit?: number;
+  /** Bytes written into memory before the Run, at a label or an address. */
+  readonly memory?: readonly MemoryWrite[];
+}
+
+/** A label of the Program, or an address. */
+export type LabelOrAddress = string | number;
+
+export interface MemoryWrite {
+  readonly at: LabelOrAddress;
+  readonly bytes: readonly number[];
 }
 
 export interface Run {
@@ -58,11 +68,24 @@ export interface Run {
   readonly nops: number;
   /** `nops` plus the `CALL` that enters the Routine. */
   readonly nopsWithCall: number;
+  /** Each byte the Run changed, by address, except the stack the Routine used (ADR 0005). */
+  readonly memoryChanges: readonly MemoryChange[];
+  /** The `length` bytes at a label or an address once the Routine has returned. */
+  memory(at: LabelOrAddress, length?: number): readonly number[];
+}
+
+/** A Memory change: `before` is the value once the test has written its bytes. */
+export interface MemoryChange {
+  readonly address: number;
+  readonly before: number;
+  readonly after: number;
 }
 
 /** What a Run needs from a Program: the 64 KB it was loaded into, and its labels. */
 export interface LoadedProgram {
   readonly bytes: Uint8Array;
+  /** The address of `label`; fails if the Program has no such label. */
+  address(label: string): number;
   /** Whether the Program put a byte at `address`. */
   occupies(address: number): boolean;
   /** The label at or nearest below `address`, as `label` or `label+offset`; empty if none. */
@@ -82,6 +105,8 @@ export function run(
       `The NOP limit cannot be ${nopLimit}: it takes a whole number of NOPs, 0 or more`,
     );
   }
+  const toAddress = (at: LabelOrAddress) =>
+    typeof at === "string" ? loaded.address(at) : at;
   const cpu = createCpu();
   const memory = cpu.memory;
   memory.set(loaded.bytes);
@@ -99,9 +124,28 @@ export function run(
     }
     memory[address] = byte;
   }
+  for (const { at, bytes } of options.memory ?? []) {
+    const start = toAddress(at);
+    for (const [i, byte] of bytes.entries()) {
+      const address = (start + i) & 0xffff;
+      if (!(Number.isInteger(byte) && byte >= 0 && byte <= 0xff)) {
+        throw new Error(
+          `The byte at ${hex(address)} cannot be ${byte}: it takes 0 to 255`,
+        );
+      }
+      if (address === sp || address === ((sp + 1) & 0xffff)) {
+        throw new Error(
+          `The bytes written at ${hex(start)} would overwrite the return address pushed at ${hex(sp)}; set another SP`,
+        );
+      }
+      memory[address] = byte;
+    }
+  }
   cpu.setRegisters({ ...options.registers, sp, pc: entry });
   cpu.setRegisters({ f: withFlags(cpu.registers().f, options.flags ?? {}) });
 
+  const initial = memory.slice();
+  const stack = new Stack(callerSp);
   const history = new History();
   const failure = (reason: string, registers: Registers) =>
     new Error(report(reason, history.lines(loaded), registers));
@@ -126,6 +170,7 @@ export function run(
       );
     }
     nops += cost;
+    stack.reach(before.sp);
     // Halted, PC is already past the HALT, and the CPU executes no instruction of the Routine.
     if (!halted) {
       history.record(memory, before.pc);
@@ -134,12 +179,65 @@ export function run(
   }
 
   const registers = Object.freeze(cpu.registers());
+  // The CPU's memory lives on in its WebAssembly instance; the result keeps a copy.
+  const final = memory.slice();
   return Object.freeze({
     registers,
     flags: Object.freeze(flagsOf(registers.f)),
     nops,
     nopsWithCall: nops + CALL_NOPS,
+    memoryChanges: Object.freeze(
+      changes(initial, final).filter(({ address }) => !stack.holds(address)),
+    ),
+    memory: (at: LabelOrAddress, length = 1) => {
+      const address = toAddress(at);
+      return Object.freeze(
+        Array.from({ length }, (_, i) => final[(address + i) & 0xffff] ?? 0),
+      );
+    },
   });
+}
+
+/** The stack the Routine used, which Memory changes leave out (ADR 0005). */
+class Stack {
+  // Depths count bytes below the caller's SP; the sentinel return address is the first 2.
+  private deepest = 2;
+  // The depth of the last SP seen, or undefined if SP had left the stack.
+  private last: number | undefined = 2;
+
+  constructor(private readonly callerSp: number) {}
+
+  reach(sp: number): void {
+    const depth = this.depthOf(sp);
+    if (
+      this.last !== undefined &&
+      depth > this.deepest &&
+      depth <= this.last + 2
+    ) {
+      this.deepest = depth;
+    }
+    this.last = depth <= this.deepest ? depth : undefined;
+  }
+
+  holds(address: number): boolean {
+    const depth = this.depthOf(address);
+    return depth >= 1 && depth <= this.deepest;
+  }
+
+  private depthOf(address: number): number {
+    return (this.callerSp - address) & 0xffff;
+  }
+}
+
+function changes(initial: Uint8Array, final: Uint8Array): MemoryChange[] {
+  const result: MemoryChange[] = [];
+  for (const [address, after] of final.entries()) {
+    const before = initial[address] ?? 0;
+    if (after !== before) {
+      result.push(Object.freeze({ address, before, after }));
+    }
+  }
+  return result;
 }
 
 const REPORTED_REGISTERS: readonly (readonly [string, keyof Registers])[][] = [
@@ -263,6 +361,7 @@ function flagsOf(f: number): Flags {
   return Object.fromEntries(entries) as Flags;
 }
 
-function hex(value: number, digits = 4): string {
+/** `value` in CPC hexadecimal, as `#C000`. */
+export function hex(value: number, digits = 4): string {
   return `#${value.toString(16).toUpperCase().padStart(digits, "0")}`;
 }

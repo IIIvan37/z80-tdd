@@ -4,7 +4,14 @@ import { type LoadedProgram, type Run, type RunOptions, run } from "./run.ts";
 export interface Program {
   /** The address of `label`; fails if the Program has no such label. */
   address(label: string): number;
+  /** The `length` bytes from `label`. */
+  range(label: string, length: number): MemoryRange;
   run(label: string, options?: RunOptions): Run;
+}
+
+export interface MemoryRange {
+  readonly address: number;
+  readonly length: number;
 }
 
 export interface LoadProgramOptions {
@@ -27,8 +34,17 @@ export async function loadProgram({
   const byAddress = Object.entries(assembly.symbols).sort(
     ([, a], [, b]) => a - b,
   );
+  const addressOf = (label: string): number => {
+    const address = assembly.symbols[label];
+    if (address === undefined) {
+      throw new Error(`The Program has no label "${label}"`);
+    }
+    return address;
+  };
+
   const loaded: LoadedProgram = {
     bytes: memory,
+    address: addressOf,
     occupies: (address) => occupied[address] === 1,
     labelNear: (address) => {
       const below = byAddress.findLast(([, at]) => at <= address);
@@ -41,16 +57,16 @@ export async function loadProgram({
     },
   };
 
-  const addressOf = (label: string): number => {
-    const address = assembly.symbols[label];
-    if (address === undefined) {
-      throw new Error(`The Program has no label "${label}"`);
-    }
-    return address;
-  };
-
   return {
     address: addressOf,
+    range: (label, length) => {
+      if (!(Number.isInteger(length) && length >= 1 && length <= 0x10000)) {
+        throw new Error(
+          `A range cannot be ${length} bytes long: it takes 1 to 65,536`,
+        );
+      }
+      return { address: addressOf(label), length };
+    },
     run: (label, options) => run(loaded, addressOf(label), options),
   };
 }
