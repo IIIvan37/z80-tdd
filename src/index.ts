@@ -3,6 +3,8 @@ export {
   type Assembly,
   type Block,
   inMemoryAssembler,
+  type RasmOptions,
+  rasmAssembler,
 } from "./assembler/index.ts";
 export type { Registers } from "./cpu/index.ts";
 export { memoryMatchers } from "./matchers.ts";

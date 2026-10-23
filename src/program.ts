@@ -34,8 +34,14 @@ export async function loadProgram({
   const byAddress = Object.entries(assembly.symbols).sort(
     ([, a], [, b]) => a - b,
   );
+  const byLabel = new Map(
+    Object.entries(assembly.symbols).map(([label, address]) => [
+      label.toUpperCase(),
+      address,
+    ]),
+  );
   const addressOf = (label: string): number => {
-    const address = assembly.symbols[label];
+    const address = byLabel.get(label.toUpperCase());
     if (address === undefined) {
       throw new Error(`The Program has no label "${label}"`);
     }

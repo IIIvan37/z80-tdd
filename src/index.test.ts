@@ -47,6 +47,15 @@ describe("a Program", () => {
 
     expect(program.address("buffer")).toBe(0x5000);
   });
+
+  it("finds a label whatever its case", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET] }],
+      symbols: { BUFFER: 0x5000 },
+    });
+
+    expect(program.address("buffer")).toBe(0x5000);
+  });
 });
 
 describe("a Run", () => {

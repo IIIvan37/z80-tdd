@@ -15,6 +15,12 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The RASM contract tests run the real rasm.
+      - name: Install RASM v3.3.1
+        run: |
+          git clone --depth 1 --branch v3.3.1 https://github.com/EdouardBERGE/rasm.git "$RUNNER_TEMP/rasm"
+          make -C "$RUNNER_TEMP/rasm" -f Makefile.linux -j"$(nproc)"
+          sudo install "$RUNNER_TEMP/rasm/rasm" /usr/local/bin/rasm
       - run: pnpm gate
 
   core:

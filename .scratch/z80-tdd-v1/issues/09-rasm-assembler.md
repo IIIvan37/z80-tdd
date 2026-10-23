@@ -4,12 +4,12 @@
 
 **Blocked by:** 01 (Walking skeleton).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The RASM adapter implements the Assembler interface; nothing outside it knows about RASM.
-- [ ] It runs `rasm` found on the PATH, or at a path given to it.
-- [ ] It returns the assembled bytes with their load addresses and the symbol table read from RASM's symbol export, checked against the installed RASM version (the local docs describe v3.2; RASM is at v3.3.1).
-- [ ] An assembly error fails the test with RASM's message, file and line.
-- [ ] A missing `rasm` fails with a message saying where to download it.
-- [ ] Contract tests assemble small `.asm` fixtures (one routine, several `ORG` blocks, an `INCLUDE`, an error) with the real `rasm`; CI installs RASM to run them.
-- [ ] A Program is assembled once per test file, not once per test.
+- [x] The RASM adapter implements the Assembler interface; nothing outside it knows about RASM.
+- [x] It runs `rasm` found on the PATH, or at a path given to it.
+- [x] It returns the assembled bytes with their load addresses and the symbol table read from RASM's symbol export, checked against the installed RASM version (the local docs describe v3.2; RASM is at v3.3.1).
+- [x] An assembly error fails the test with RASM's message, file and line.
+- [x] A missing `rasm` fails with a message saying where to download it.
+- [x] Contract tests assemble small `.asm` fixtures (one routine, several `ORG` blocks, an `INCLUDE`, an error) with the real `rasm`; CI installs RASM to run them.
+- [x] A Program is assembled once per test file, not once per test.

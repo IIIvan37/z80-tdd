@@ -1,0 +1,3 @@
+clear:
+ xor a
+ ret
