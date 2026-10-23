@@ -11,5 +11,5 @@ export interface Assembly {
 
 export interface Assembler {
   /** `root` is the project root, which a relative path starts from. */
-  assemble(source: string, root?: string): Promise<Assembly>;
+  assemble(source: string, root: string): Promise<Assembly>;
 }

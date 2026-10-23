@@ -4,11 +4,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { rasmAssembler } from "./index.ts";
 
-const fixture = (name: string) => join(import.meta.dirname, "fixtures", name);
+const FIXTURES = join(import.meta.dirname, "fixtures");
+const fixture = (name: string) => join(FIXTURES, name);
 
 describe("the RASM Assembler, with the real rasm", () => {
   it("assembles a Routine at its ORG address, with its label", async () => {
-    const assembly = await rasmAssembler().assemble(fixture("routine.asm"));
+    const assembly = await rasmAssembler().assemble("routine.asm", FIXTURES);
 
     expect(assembly).toEqual({
       blocks: [{ address: 0x4000, bytes: [0x87, 0xc9] }],
@@ -18,7 +19,8 @@ describe("the RASM Assembler, with the real rasm", () => {
 
   it("gives each ORG block its own load address", async () => {
     const assembly = await rasmAssembler().assemble(
-      fixture("several-orgs.asm"),
+      "several-orgs.asm",
+      FIXTURES,
     );
 
     expect(assembly).toEqual({
@@ -31,7 +33,10 @@ describe("the RASM Assembler, with the real rasm", () => {
   });
 
   it("loads a block at the address it is stored at, not the one it runs at", async () => {
-    const assembly = await rasmAssembler().assemble(fixture("logical-org.asm"));
+    const assembly = await rasmAssembler().assemble(
+      "logical-org.asm",
+      FIXTURES,
+    );
 
     expect(assembly).toEqual({
       blocks: [
@@ -43,14 +48,15 @@ describe("the RASM Assembler, with the real rasm", () => {
   });
 
   it("gives the symbols defined by EQU along with the labels", async () => {
-    const assembly = await rasmAssembler().assemble(fixture("equ.asm"));
+    const assembly = await rasmAssembler().assemble("equ.asm", FIXTURES);
 
     expect(assembly.symbols).toEqual({ START: 0x4000, BUFFER: 0x9000 });
   });
 
   it("assembles an INCLUDE relative to the including file", async () => {
     const assembly = await rasmAssembler().assemble(
-      fixture("with-include.asm"),
+      "with-include.asm",
+      FIXTURES,
     );
 
     expect(assembly).toEqual({
@@ -66,7 +72,7 @@ describe("the RASM Assembler, with the real rasm", () => {
     try {
       await copyFile(fixture("routine.asm"), join(dir, "routine.asm"));
 
-      const assembly = await rasmAssembler().assemble(join(dir, "routine.asm"));
+      const assembly = await rasmAssembler().assemble("routine.asm", dir);
 
       expect(assembly.symbols).toEqual({ DOUBLE: 0x4000 });
     } finally {
@@ -76,7 +82,7 @@ describe("the RASM Assembler, with the real rasm", () => {
 
   it("fails with RASM's message, file and line", async () => {
     await expect(
-      rasmAssembler().assemble(fixture("error.asm")),
+      rasmAssembler().assemble("error.asm", FIXTURES),
     ).rejects.toThrow(/error\.asm:3\b.*LD needs two parameters/);
   });
 
@@ -84,14 +90,14 @@ describe("the RASM Assembler, with the real rasm", () => {
     const notExecutable = fixture("routine.asm");
 
     await expect(
-      rasmAssembler({ path: notExecutable }).assemble(fixture("routine.asm")),
+      rasmAssembler({ path: notExecutable }).assemble("routine.asm", FIXTURES),
     ).rejects.toThrow(/EACCES/);
   });
 
   it("fails when rasm cannot be found, saying where to download it", async () => {
     const assembler = rasmAssembler({ path: "/no/such/dir/rasm" });
 
-    await expect(assembler.assemble(fixture("routine.asm"))).rejects.toThrow(
+    await expect(assembler.assemble("routine.asm", FIXTURES)).rejects.toThrow(
       /\/no\/such\/dir\/rasm.*https:\/\/github\.com\/EdouardBERGE\/rasm\/releases/s,
     );
   });

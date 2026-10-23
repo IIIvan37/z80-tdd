@@ -32,10 +32,10 @@ export interface RasmOptions {
   readonly path?: string;
 }
 
-/** An Assembler that runs RASM on a source file; without a project root, paths start from the working directory. */
+/** An Assembler that runs RASM on a source file. */
 export function rasmAssembler({ path = "rasm" }: RasmOptions = {}): Assembler {
   return {
-    async assemble(source, root = process.cwd()) {
+    async assemble(source, root) {
       // rasm runs in a temporary folder: a path with a folder in it must not
       // resolve from there, and a bare name stays a PATH lookup.
       const command = path === basename(path) ? path : resolve(root, path);

@@ -68,7 +68,7 @@ export async function loadSettings(
   overrides: ConfigurationFile,
 ): Promise<ResolvedSettings> {
   check(overrides, "loadProgram()");
-  const path = findFile();
+  const { path, root } = findFile();
   const {
     assembler = rasmAssembler(),
     source,
@@ -84,19 +84,18 @@ export async function loadSettings(
       `No source file to assemble: set "source" in ${FILE}, or pass it to loadProgram()`,
     );
   }
-  const root = path === undefined ? process.cwd() : dirname(path);
   return { assembler, source, root, sp, nopLimit, portMask };
 }
 
 // Vitest may run from a folder below the project root, as an editor does for one test file.
-function findFile(): string | undefined {
+function findFile(): { path?: string; root: string } {
   for (let dir = process.cwd(); ; dir = dirname(dir)) {
     const path = join(dir, FILE);
     if (existsSync(path)) {
-      return path;
+      return { path, root: dir };
     }
     if (dirname(dir) === dir) {
-      return undefined;
+      return { root: process.cwd() };
     }
   }
 }

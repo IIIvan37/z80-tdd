@@ -7,9 +7,9 @@ const LD_A_N = 0x3e;
 const LD_HL_NN = 0x21;
 const RET = 0xc9;
 
-// `ld a,7 : ld hl,#c000 : ret`, labelled `set`.
-function load() {
-  return loadProgram({
+// Runs `ld a,7 : ld hl,#c000 : ret`.
+async function runSet() {
+  const program = await loadProgram({
     source: "main.asm",
     assembler: inMemoryAssembler({
       "main.asm": {
@@ -20,13 +20,12 @@ function load() {
       },
     }),
   });
+  return program.run("set");
 }
 
 describe("the matcher toHaveRegisters", () => {
   it("passes when the registers it names match, whatever the others hold", async () => {
-    const program = await load();
-
-    const run = program.run("set");
+    const run = await runSet();
 
     expect(run).toHaveRegisters({ a: 0x07, hl: 0xc000 });
     expect(() =>
@@ -35,9 +34,7 @@ describe("the matcher toHaveRegisters", () => {
   });
 
   it("fails naming only the registers that differ, in CPC hexadecimal", async () => {
-    const program = await load();
-
-    const run = program.run("set");
+    const run = await runSet();
 
     expect(() =>
       expect(run).toHaveRegisters({ a: 0x2a, hl: 0xc000, afPrime: 0x1234 }),
@@ -51,9 +48,7 @@ describe("the matcher toHaveRegisters", () => {
     ["a value left undefined", { a: undefined }, /A cannot be undefined/],
     ["a value wider than the register", { a: 0x1ff }, /A cannot be 511/],
   ])("fails on %s, naming it", async (_, expected, message) => {
-    const program = await load();
-
-    const run = program.run("set");
+    const run = await runSet();
 
     expect(() => expect(run).toHaveRegisters(expected as never)).toThrow(
       message,
@@ -64,9 +59,7 @@ describe("the matcher toHaveRegisters", () => {
   });
 
   it("fails when it names no register", async () => {
-    const program = await load();
-
-    const run = program.run("set");
+    const run = await runSet();
 
     expect(() => expect(run).toHaveRegisters({})).toThrow(/names no register/);
   });

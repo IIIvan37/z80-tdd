@@ -27,7 +27,7 @@ export const runMatchers = {
     );
     const span = `${hex(range.address)}-${hex((range.address + range.length - 1) & 0xffff)}`;
     return verdict(
-      outside,
+      lines(outside),
       `Memory changed only inside ${span}`,
       `Memory changed outside ${span}:`,
     );
@@ -35,7 +35,7 @@ export const runMatchers = {
 
   toLeaveMemoryUnchanged(run: Run) {
     return verdict(
-      run.memoryChanges,
+      lines(run.memoryChanges),
       "Memory did not change",
       "Memory changed:",
     );
@@ -46,22 +46,15 @@ export const runMatchers = {
     const differing = expectations.filter(
       ([name, value]) => run.registers[name] !== value,
     );
-    const width = Math.max(
-      ...expectations.map(([name]) => labelOf(name).length),
+    const width = Math.max(...differing.map(([name]) => labelOf(name).length));
+    return verdict(
+      differing.map(
+        ([name, value]) =>
+          `  ${labelOf(name).padEnd(width)}  expected ${hexOf(name, value)}, received ${hexOf(name, run.registers[name])}`,
+      ),
+      `Registers match: ${expectations.map(([name, value]) => `${labelOf(name)} ${hexOf(name, value)}`).join(", ")}`,
+      "Registers differ:",
     );
-    return {
-      pass: differing.length === 0,
-      message: () =>
-        differing.length === 0
-          ? `Registers match: ${expectations.map(([name, value]) => `${labelOf(name)} ${hexOf(name, value)}`).join(", ")}`
-          : [
-              "Registers differ:",
-              ...differing.map(
-                ([name, value]) =>
-                  `  ${labelOf(name).padEnd(width)}  expected ${hexOf(name, value)}, received ${hexOf(name, run.registers[name])}`,
-              ),
-            ].join("\n"),
-    };
   },
 };
 
@@ -89,7 +82,7 @@ function checked(expected: Partial<Registers>): [keyof Registers, number][] {
     }
     if (!Number.isInteger(value) || value < 0 || value >= 16 ** digits) {
       throw new Error(
-        `${labelOf(name as keyof Registers)} cannot be ${value}: it takes ${digits === 2 ? "a byte, #00 to #FF" : "a word, #0000 to #FFFF"}`,
+        `${labelOf(name)} cannot be ${value}: it takes ${hex(0, digits)} to ${hex(16 ** digits - 1, digits)}`,
       );
     }
   }
@@ -97,7 +90,7 @@ function checked(expected: Partial<Registers>): [keyof Registers, number][] {
 }
 
 /** The register as the Z80 manuals write it: `afPrime` is AF'. */
-function labelOf(name: keyof Registers): string {
+function labelOf(name: string): string {
   return name.replace("Prime", "'").toUpperCase();
 }
 
@@ -105,16 +98,12 @@ function hexOf(name: keyof Registers, value: number): string {
   return hex(value, DIGITS.get(name));
 }
 
-/** Passes when `changes` is empty; the message names each change otherwise. */
-function verdict(
-  changes: readonly MemoryChange[],
-  passed: string,
-  failed: string,
-) {
+/** Passes when `failures` is empty; the message lists them otherwise. */
+function verdict(failures: readonly string[], passed: string, failed: string) {
   return {
-    pass: changes.length === 0,
+    pass: failures.length === 0,
     message: () =>
-      changes.length === 0 ? passed : [failed, ...lines(changes)].join("\n"),
+      failures.length === 0 ? passed : [failed, ...failures].join("\n"),
   };
 }
 
