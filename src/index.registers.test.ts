@@ -45,4 +45,29 @@ describe("the matcher toHaveRegisters", () => {
       "Registers differ:\n  A    expected #2A, received #07\n  AF'  expected #1234, received #0000",
     );
   });
+
+  it.each([
+    ["a name that is not a register", { foo: 1 }, /"foo" is not a register/],
+    ["a value left undefined", { a: undefined }, /A cannot be undefined/],
+    ["a value wider than the register", { a: 0x1ff }, /A cannot be 511/],
+  ])("fails on %s, naming it", async (_, expected, message) => {
+    const program = await load();
+
+    const run = program.run("set");
+
+    expect(() => expect(run).toHaveRegisters(expected as never)).toThrow(
+      message,
+    );
+    expect(() => expect(run).not.toHaveRegisters(expected as never)).toThrow(
+      message,
+    );
+  });
+
+  it("fails when it names no register", async () => {
+    const program = await load();
+
+    const run = program.run("set");
+
+    expect(() => expect(run).toHaveRegisters({})).toThrow(/names no register/);
+  });
 });

@@ -32,7 +32,7 @@ export interface RasmOptions {
   readonly path?: string;
 }
 
-/** An Assembler that runs RASM on a source file. */
+/** An Assembler that runs RASM on a source file; without a project root, paths start from the working directory. */
 export function rasmAssembler({ path = "rasm" }: RasmOptions = {}): Assembler {
   return {
     async assemble(source, root = process.cwd()) {

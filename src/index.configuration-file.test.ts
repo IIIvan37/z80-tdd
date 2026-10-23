@@ -254,6 +254,17 @@ export default defineConfig({ ${settings} });
     expect(program.run("start").registers.a).toBe(7);
   });
 
+  it("gives a test file's source file from the project root", async () => {
+    await writeFile(join(project, "other.asm"), RASM_SOURCE);
+    await configure(`source: "main.asm"`);
+    await mkdir(join(project, "src"));
+    process.chdir(join(project, "src"));
+
+    const program = await loadProgram({ source: "other.asm" });
+
+    expect(program.run("start").registers.a).toBe(7);
+  });
+
   it("names no Assembler, so loadProgram() runs rasm on the PATH", async () => {
     await writeFile(join(project, "main.asm"), RASM_SOURCE);
     await configure(`source: "main.asm"`);

@@ -25,9 +25,9 @@ export interface ConfigurationFile {
   readonly portMask?: number;
 }
 
-/** Each setting a Program needs: a test file's over the configuration file's, over the defaults. */
+/** Each setting a Program needs, a test file's over the configuration file's, over the defaults, and the project root. */
 type ResolvedSettings = Required<ConfigurationFile> & {
-  /** The folder of the configuration file, or the working directory without one. */
+  /** The folder of the configuration file, or the working directory without one; no setting changes it. */
   readonly root: string;
 };
 
