@@ -1,0 +1,5 @@
+# Pinned so that `pnpm build:wasm` gives the same src/cpu/cell80.wasm everywhere; CI checks it.
+[toolchain]
+channel = "1.95.0"
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

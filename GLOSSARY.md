@@ -16,6 +16,14 @@ _Avoid_: Call, execution, invocation
 The external program that turns the CPC project's source into machine code and a symbol table; RASM is the first one supported.
 _Avoid_: Compiler, toolchain
 
+**Configuration file**:
+The typed `z80-tdd.config.ts` at the root of the CPC project, holding the **Assembler**, the default source file, the default SP and the default **NOP limit**; a test file or a **Run** can override each.
+_Avoid_: Settings file, config
+
+**CPU**:
+The emulated Z80 processor that executes a **Run**, with its registers and flags.
+_Avoid_: Processor
+
 **Program**:
 The machine code and symbol table the **Assembler** produces from one source file of the CPC project, loaded at its real addresses before each **Run**.
 _Avoid_: Build, binary, image
@@ -23,6 +31,10 @@ _Avoid_: Build, binary, image
 **Memory change**:
 One byte whose value after a **Run** differs from its value before, given by address, old value and new value.
 _Avoid_: Diff, side effect
+
+**Matcher**:
+A Vitest assertion on a **Run** that the tool adds to `expect`, such as "only this range changed", whose failure message shows the state at fault.
+_Avoid_: Assertion helper, checker
 
 **NOP**:
 The CPC unit of time, one microsecond, in which the duration of a **Run** is counted; the Z80 instruction of the same name is only ever written as code, `NOP`.

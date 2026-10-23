@@ -1,0 +1,11 @@
+[package]
+name = "cell80-z80"
+description = "Pure, no_std Z80 CPU core (registers, decode, Bus trait)."
+version = "0.8.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/chrishayuk/cell80"
+
+[lib]
+name = "z80"

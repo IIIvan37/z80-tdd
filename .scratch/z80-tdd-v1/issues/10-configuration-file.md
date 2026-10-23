@@ -4,11 +4,11 @@
 
 **Blocked by:** 06 (NOP limit and failure report), 09 (The RASM Assembler).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A typed `z80-tdd.config.ts` at the CPC project root holds the Assembler and its path, the default source file, the default SP and the default NOP limit.
-- [ ] `loadProgram()` with no argument assembles the configured default source file with the configured Assembler.
-- [ ] A test file can name another source file.
-- [ ] A Run can override SP and the NOP limit.
-- [ ] Without a configuration file, the defaults apply (`rasm` on the PATH, SP `#C000`, 1,000,000 NOPs), and `loadProgram()` without a source file fails with a message saying what to configure.
-- [ ] An invalid configuration fails with a message naming the faulty setting.
+- [x] A typed `z80-tdd.config.ts` at the CPC project root holds the Assembler and its path, the default source file, the default SP and the default NOP limit.
+- [x] `loadProgram()` with no argument assembles the configured default source file with the configured Assembler.
+- [x] A test file can name another source file.
+- [x] A Run can override SP and the NOP limit.
+- [x] Without a configuration file, the defaults apply (`rasm` on the PATH, SP `#C000`, 1,000,000 NOPs), and `loadProgram()` without a source file fails with a message saying what to configure.
+- [x] An invalid configuration fails with a message naming the faulty setting.
