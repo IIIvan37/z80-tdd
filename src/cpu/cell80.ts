@@ -143,7 +143,7 @@ export function createCpu(ports: Ports = NO_PORTS): Cpu {
   return {
     memory,
     // Spelled out rather than built from WORD_REGISTERS and BYTE_SLOTS: the Run reads the
-    // registers before every step, and building the object from entries is 50 times slower.
+    // registers before every step, and building the object from entries is 40 times slower.
     registers: (): Registers => {
       const [
         af,
