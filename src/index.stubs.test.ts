@@ -223,7 +223,31 @@ describe("the Stubs of a Run", () => {
         stubs: [{ at: 0xbb5a, registers: { a: 0x100 } }],
       }),
     ).toThrow(
-      "Register a of the Stub at #BB5A cannot hold 256: it takes 0 to 255",
+      "Register A of the Stub at #BB5A cannot be 256: it takes #00 to #FF",
+    );
+  });
+
+  it("refuses a name that is not a register among the Stub's, naming the Stub", async () => {
+    const program = await loadPlaySound();
+
+    expect(() =>
+      program.run("play_sound", {
+        stubs: [{ at: 0xbb5a, registers: { foo: 1 } as never }],
+      }),
+    ).toThrow(
+      '"foo" is not a register of the Stub at #BB5A: the registers are',
+    );
+  });
+
+  it("refuses a register the Stub leaves undefined, naming the Stub", async () => {
+    const program = await loadPlaySound();
+
+    expect(() =>
+      program.run("play_sound", {
+        stubs: [{ at: 0xbb5a, registers: { a: undefined } as never }],
+      }),
+    ).toThrow(
+      "Register A of the Stub at #BB5A cannot be undefined: it takes #00 to #FF",
     );
   });
 
@@ -235,7 +259,7 @@ describe("the Stubs of a Run", () => {
       expect(() =>
         program.run("play_sound", { stubs: [{ at: "play_sound", registers }] }),
       ).toThrow(
-        `Register ${name} of the Stub at play_sound cannot be set: the Stub's return sets SP and PC`,
+        `Register ${name.toUpperCase()} of the Stub at play_sound cannot be set: the Stub's return sets SP and PC`,
       );
     }
   });

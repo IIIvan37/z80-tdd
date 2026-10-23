@@ -1,8 +1,16 @@
 // The augmentation below needs vitest in the program: import its types here rather than count on a test file to.
 import type {} from "vitest";
-import { BYTE_REGISTERS, type Registers, WORD_REGISTERS } from "./cpu/index.ts";
+import {
+  checkRegisters,
+  hex,
+  type RegisterName,
+  type Registers,
+  registerHex,
+  registerLabel,
+  registerText,
+} from "./cpu/index.ts";
 import type { MemoryRange } from "./program.ts";
-import { hex, type MemoryChange, type Run } from "./run.ts";
+import type { MemoryChange, Run } from "./run.ts";
 
 declare module "vitest" {
   // The type parameters must match Vitest's own declaration of Matchers.
@@ -46,56 +54,31 @@ export const runMatchers = {
     const differing = expectations.filter(
       ([name, value]) => run.registers[name] !== value,
     );
-    const width = Math.max(...differing.map(([name]) => labelOf(name).length));
+    const width = Math.max(
+      ...differing.map(([name]) => registerLabel(name).length),
+    );
     return verdict(
       differing.map(
         ([name, value]) =>
-          `  ${labelOf(name).padEnd(width)}  expected ${hexOf(name, value)}, received ${hexOf(name, run.registers[name])}`,
+          `  ${registerLabel(name).padEnd(width)}  expected ${registerHex(name, value)}, received ${registerHex(name, run.registers[name])}`,
       ),
-      `Registers match: ${expectations.map(([name, value]) => `${labelOf(name)} ${hexOf(name, value)}`).join(", ")}`,
+      `Registers match: ${expectations.map(([name, value]) => registerText(name, value)).join(", ")}`,
       "Registers differ:",
     );
   },
 };
 
-/** The hexadecimal digits of each register: 2 for 8 bits, 4 for 16. */
-const DIGITS = new Map<string, number>([
-  ...BYTE_REGISTERS.map((name) => [name, 2] as const),
-  ...WORD_REGISTERS.map((name) => [name, 4] as const),
-]);
-
 // TypeScript refuses these mistakes, but a test in plain JavaScript or with a cast
 // must not get a TypeError, nor pass under `.not`.
-function checked(expected: Partial<Registers>): [keyof Registers, number][] {
+function checked(expected: Partial<Registers>): [RegisterName, number][] {
   const entries = Object.entries(expected);
   if (entries.length === 0) {
     throw new Error(
       "toHaveRegisters() names no register: give at least one, as { a: 0x2a }",
     );
   }
-  for (const [name, value] of entries) {
-    const digits = DIGITS.get(name);
-    if (digits === undefined) {
-      throw new Error(
-        `"${name}" is not a register: the registers are ${[...DIGITS.keys()].join(", ")}`,
-      );
-    }
-    if (!Number.isInteger(value) || value < 0 || value >= 16 ** digits) {
-      throw new Error(
-        `${labelOf(name)} cannot be ${value}: it takes ${hex(0, digits)} to ${hex(16 ** digits - 1, digits)}`,
-      );
-    }
-  }
-  return entries as [keyof Registers, number][];
-}
-
-/** The register as the Z80 manuals write it: `afPrime` is AF'. */
-function labelOf(name: string): string {
-  return name.replace("Prime", "'").toUpperCase();
-}
-
-function hexOf(name: keyof Registers, value: number): string {
-  return hex(value, DIGITS.get(name));
+  checkRegisters(expected);
+  return entries as [RegisterName, number][];
 }
 
 /** Passes when `failures` is empty; the message lists them otherwise. */

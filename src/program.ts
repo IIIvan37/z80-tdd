@@ -1,11 +1,6 @@
 import { type ConfigurationFile, loadSettings } from "./configuration-file.ts";
-import {
-  isWholeIn,
-  type LoadedProgram,
-  type Run,
-  type RunOptions,
-  run,
-} from "./run.ts";
+import { isWholeIn } from "./cpu/index.ts";
+import { type LoadedProgram, type Run, type RunOptions, run } from "./run.ts";
 
 export interface Program {
   /** The address of `label`; fails if the Program has no such label. */

@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import {
   BYTE_REGISTERS,
   type Cpu,
-  type Instruction,
   type Internals,
   type Ports,
   type Registers,
@@ -102,28 +101,25 @@ function instantiate(ports: Ports): Exports {
 let disassembler: Exports | undefined;
 const DECODER = new TextDecoder();
 
-/** Disassembles the instruction made of `bytes` (only the ones it spans are read) at `address`. */
-export function disassemble(
-  address: number,
-  bytes: readonly number[],
-): Instruction {
+/**
+ * The mnemonic of the instruction made of `bytes` (only the ones it spans are read) at `address`,
+ * numbers in hexadecimal as CPC assemblers write them, such as `LD A,#05`.
+ */
+export function disassemble(address: number, bytes: readonly number[]): string {
   disassembler ??= instantiate(NO_PORTS);
   const firstFourBytes = [0, 1, 2, 3].reduce(
     (word, i) => word + (bytes[i] ?? 0) * 2 ** (8 * i),
     0,
   );
-  // The instruction's length in the high byte, the text's length in the low byte.
+  // The instruction's length in the high byte, unused here; the text's length in the low byte.
   const lengths = disassembler.disassemble(address, firstFourBytes);
   const text = new Uint8Array(
     disassembler.memory.buffer,
     disassembler.text_ptr(),
     lengths & 0xff,
   );
-  return {
-    // cell80 writes `$` before a hexadecimal number; CPC assemblers write `#`.
-    text: DECODER.decode(text).replaceAll("$", "#"),
-    length: lengths >> 8,
-  };
+  // cell80 writes `$` before a hexadecimal number; CPC assemblers write `#`.
+  return DECODER.decode(text).replaceAll("$", "#");
 }
 
 /** A Cpu backed by the cell80-z80 core compiled to WebAssembly, with its own 64 KB of memory. */

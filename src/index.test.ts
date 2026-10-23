@@ -279,13 +279,35 @@ describe("a Run", () => {
 
     expect(() =>
       program.run("nothing", { registers: { bc: 0x12345 } }),
-    ).toThrow(/bc/);
+    ).toThrow("Register BC cannot be 74565: it takes #0000 to #FFFF");
     expect(() => program.run("nothing", { registers: { a: 0x100 } })).toThrow(
-      /\ba\b/,
+      "Register A cannot be 256: it takes #00 to #FF",
     );
     expect(() => program.run("nothing", { registers: { h: -1 } })).toThrow(
-      /\bh\b/,
+      "Register H cannot be -1: it takes #00 to #FF",
     );
+  });
+
+  it("fails on a name that is not a register, rather than ignore it", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET] }],
+      symbols: { nothing: 0x4000 },
+    });
+
+    expect(() =>
+      program.run("nothing", { registers: { HL: 0x1234 } as never }),
+    ).toThrow('"HL" is not a register: the registers are a, f, b, c,');
+  });
+
+  it("fails on a register left undefined, rather than leave it at zero", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET] }],
+      symbols: { nothing: 0x4000 },
+    });
+
+    expect(() =>
+      program.run("nothing", { registers: { a: undefined } as never }),
+    ).toThrow("Register A cannot be undefined: it takes #00 to #FF");
   });
 
   it("refuses a PC set by the test, since the Run starts at the entry label", async () => {
@@ -296,7 +318,7 @@ describe("a Run", () => {
 
     // @ts-expect-error PC is not a register the test may set
     expect(() => program.run("nothing", { registers: { pc: 0x1234 } })).toThrow(
-      /pc/,
+      "Register PC cannot be set: the Run starts at the entry label",
     );
   });
 
