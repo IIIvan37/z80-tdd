@@ -1,12 +1,14 @@
 import {
   BYTE_REGISTERS,
+  type Cpu,
   createCpu,
   disassemble,
   type Ports,
+  type RegisterName,
   type Registers,
   WORD_REGISTERS,
 } from "./cpu/index.ts";
-import { CALL_NOPS, nopsOf } from "./nops.ts";
+import { CALL_NOPS, nopsOf, RET_NOPS } from "./nops.ts";
 
 // How many of the last instructions executed a failure report shows.
 const HISTORY_LENGTH = 16;
@@ -54,7 +56,23 @@ export interface RunOptions {
   readonly ports?: Readonly<Record<number, PortValues>>;
   /** The bits of a port address a Port read matches on; the Program's port mask by default. */
   readonly portMask?: number;
+  /** Code the Routine calls that the test does not run: each returns at once. */
+  readonly stubs?: readonly Stub[];
 }
+
+/** A label or an address where the Run returns to the caller instead of running the code there. */
+export interface Stub {
+  readonly at: LabelOrAddress;
+  /** Set as the Stub returns, as the code at `at` would have left them. */
+  readonly registers?: StubRegisters;
+  /** Applied after `registers`, so they override the matching bits of F. */
+  readonly flags?: Partial<Flags>;
+  /** What a call to the Stub costs, in NOPs, on top of the `CALL`; 3, the cost of a `RET`, by default. */
+  readonly nops?: number;
+}
+
+/** The registers a Stub may set: all but SP and PC, which its return sets. */
+export type StubRegisters = Omit<StartRegisters, "sp">;
 
 /** The values an `IN` from a port returns in order, or a function that computes each. */
 export type PortValues = readonly number[] | PortFunction;
@@ -84,6 +102,8 @@ export interface Run {
   readonly memoryChanges: readonly MemoryChange[];
   /** Each `OUT`, in order, with its full 16-bit port address. */
   readonly portWrites: readonly PortWrite[];
+  /** Each call to a Stub, in order. */
+  readonly stubCalls: readonly StubCall[];
   /** The `length` bytes at a label or an address once the Routine has returned. */
   memory(at: LabelOrAddress, length?: number): readonly number[];
 }
@@ -93,6 +113,13 @@ export interface MemoryChange {
   readonly address: number;
   readonly before: number;
   readonly after: number;
+}
+
+export interface StubCall {
+  /** The `at` of the Stub, as the test declared it. */
+  readonly at: LabelOrAddress;
+  /** The registers as PC reached the Stub, before the Stub sets its own. */
+  readonly registers: Registers;
 }
 
 export interface PortWrite {
@@ -156,7 +183,11 @@ export function run(
   entry: number,
   options: RunOptions = {},
 ): Run {
-  checkWidths(options.registers ?? {});
+  checkRegisters(
+    options.registers ?? {},
+    ["pc"],
+    "the Run starts at the entry label",
+  );
   const nopLimit = options.nopLimit ?? loaded.nopLimit;
   if (!isNopLimit(nopLimit)) {
     throw new Error(
@@ -173,6 +204,7 @@ export function run(
   checkPorts(supplied, portMask);
   const toAddress = (at: LabelOrAddress) =>
     typeof at === "string" ? loaded.address(at) : at;
+  const stubs = stubsByAddress(options.stubs ?? [], toAddress);
   const ports = new SuppliedPorts(supplied, portMask);
   const cpu = createCpu(ports);
   const memory = cpu.memory;
@@ -207,9 +239,9 @@ export function run(
       memory[address] = byte;
     }
   }
-  cpu.setRegisters({ ...options.registers, sp, pc: entry });
-  cpu.setRegisters({ f: withFlags(cpu.registers().f, options.flags ?? {}) });
+  setState(cpu, { ...options.registers, sp, pc: entry }, options.flags);
 
+  const stubCalls: StubCall[] = [];
   const initial = memory.slice();
   const stack = new Stack(callerSp);
   const history = new History();
@@ -222,7 +254,12 @@ export function run(
     before = cpu.registers()
   ) {
     const halted = cpu.internals().halted;
-    const cost = nopsOf(memory, before, halted);
+    // Halted, the CPU fetches nothing at PC, so it calls no Stub there.
+    const stub = halted ? undefined : stubs.get(before.pc);
+    const cost =
+      stub === undefined
+        ? nopsOf(memory, before, halted)
+        : (stub.nops ?? RET_NOPS);
     if (cost === undefined) {
       throw failure(
         `No NOP count for the instruction ${hex(memory[before.pc] ?? 0, 2)} at ${hex(before.pc)}`,
@@ -237,6 +274,14 @@ export function run(
     }
     nops += cost;
     stack.reach(before.sp);
+    if (stub !== undefined) {
+      stubCalls.push(
+        Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
+      );
+      history.recordStub(before.pc);
+      returnFromStub(cpu, before, stub);
+      continue;
+    }
     // Halted, PC is already past the HALT, and the CPU executes no instruction of the Routine.
     if (!halted) {
       history.record(memory, before.pc);
@@ -268,6 +313,7 @@ export function run(
       changes(initial, final).filter(({ address }) => !stack.holds(address)),
     ),
     portWrites: Object.freeze(ports.writes),
+    stubCalls: Object.freeze(stubCalls),
     memory: (at: LabelOrAddress, length = 1) => {
       const address = toAddress(at);
       return Object.freeze(
@@ -428,16 +474,26 @@ const REPORTED_REGISTERS: readonly (readonly [string, keyof Registers])[][] = [
   ],
 ];
 
-/** The last instructions executed, with the bytes they had when they ran. */
+/** The last instructions executed, with the bytes they had when they ran, and the Stubs called among them. */
 class History {
   // A ring buffer allocated once: record() runs on every step of a Run.
   private readonly addresses = new Uint16Array(HISTORY_LENGTH);
   private readonly bytes = new Uint8Array(HISTORY_LENGTH * LONGEST_INSTRUCTION);
+  // 1 where the slot holds a Stub call, which has no bytes to disassemble.
+  private readonly stubbed = new Uint8Array(HISTORY_LENGTH);
   private recorded = 0;
+
+  recordStub(address: number): void {
+    const slot = this.recorded % HISTORY_LENGTH;
+    this.addresses[slot] = address;
+    this.stubbed[slot] = 1;
+    this.recorded++;
+  }
 
   record(memory: Uint8Array, address: number): void {
     const slot = this.recorded % HISTORY_LENGTH;
     this.addresses[slot] = address;
+    this.stubbed[slot] = 0;
     for (let i = 0; i < LONGEST_INSTRUCTION; i++) {
       this.bytes[slot * LONGEST_INSTRUCTION + i] =
         memory[(address + i) & 0xffff] ?? 0;
@@ -458,7 +514,7 @@ class History {
       return {
         address,
         label: loaded.labelNear(address),
-        text: disassemble(address, bytes).text,
+        text: this.stubbed[slot] ? "Stub" : disassemble(address, bytes).text,
       };
     });
     const width = Math.max(0, ...rows.map(({ label }) => label.length));
@@ -522,11 +578,62 @@ function checkPorts(
   }
 }
 
-function checkWidths(registers: StartRegisters): void {
-  if ("pc" in registers) {
-    throw new Error(
-      "Register pc cannot be set: the Run starts at the entry label",
+/** A label as written, an address in CPC hexadecimal. */
+function nameOf(at: LabelOrAddress): string {
+  return typeof at === "string" ? at : hex(at);
+}
+
+/** The Stubs by the address PC reaches them at, once each is checked. */
+function stubsByAddress(
+  stubs: readonly Stub[],
+  toAddress: (at: LabelOrAddress) => number,
+): Map<number, Stub> {
+  const result = new Map<number, Stub>();
+  for (const stub of stubs) {
+    const { at, registers, nops } = stub;
+    if (typeof at === "number" && !isAddress(at)) {
+      throw new Error(`A Stub cannot be at ${at}: it takes ${ADDRESS_TAKES}`);
+    }
+    const name = nameOf(at);
+    checkRegisters(
+      registers ?? {},
+      ["sp", "pc"],
+      "the Stub's return sets SP and PC",
+      `of the Stub at ${name}`,
     );
+    if (nops !== undefined && !isNopLimit(nops)) {
+      throw new Error(
+        `The Stub at ${name} cannot cost ${nops} NOPs: it takes ${NOP_LIMIT_TAKES}`,
+      );
+    }
+    const address = toAddress(at);
+    const other = result.get(address);
+    if (other !== undefined) {
+      throw new Error(
+        `The Stubs at ${nameOf(other.at)} and ${name} are both at ${hex(address)}`,
+      );
+    }
+    result.set(address, stub);
+  }
+  return result;
+}
+
+/**
+ * Fails on a register in `unsettable`, which `why` explains, or a value too wide for its register.
+ * `setter` follows the register's name in the message, as "Register a of the Stub at #BB5A".
+ */
+function checkRegisters(
+  registers: StartRegisters,
+  unsettable: readonly RegisterName[],
+  why: string,
+  setter?: string,
+): void {
+  const subject = (name: string) =>
+    setter === undefined ? `Register ${name}` : `Register ${name} ${setter}`;
+  for (const name of unsettable) {
+    if (name in registers) {
+      throw new Error(`${subject(name)} cannot be set: ${why}`);
+    }
   }
   for (const [names, max] of [
     [WORD_REGISTERS, 0xffff],
@@ -536,11 +643,33 @@ function checkWidths(registers: StartRegisters): void {
       const value = (registers as Partial<Registers>)[name];
       if (value !== undefined && !isWholeIn(value, 0, max)) {
         throw new Error(
-          `Register ${name} cannot hold ${value}: it takes 0 to ${max}`,
+          `${subject(name)} cannot hold ${value}: it takes 0 to ${max}`,
         );
       }
     }
   }
+}
+
+/** Sets `registers`, then the `flags` over the bits of F. */
+function setState(
+  cpu: Cpu,
+  registers: Partial<Registers>,
+  flags: Partial<Flags> = {},
+): void {
+  cpu.setRegisters(registers);
+  cpu.setRegisters({ f: withFlags(cpu.registers().f, flags) });
+}
+
+/** Sets the Stub's registers and flags, and pops the return address as a `RET` would. */
+function returnFromStub(cpu: Cpu, before: Registers, stub: Stub): void {
+  const { memory } = cpu;
+  const returnAddress =
+    (memory[before.sp] ?? 0) | ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
+  setState(
+    cpu,
+    { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
+    stub.flags,
+  );
 }
 
 function hasReturned({ pc, sp }: Registers, callerSp: number): boolean {

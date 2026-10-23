@@ -18,6 +18,8 @@ interface Conditional {
 type Entry = number | Conditional;
 
 export const CALL_NOPS = 5;
+// What a `RET` costs, and so what a Stub costs unless the test sets its duration.
+export const RET_NOPS = 3;
 // Each step a halted CPU takes: the NOP it executes internally until an interrupt.
 const HALTED_NOPS = 1;
 
@@ -93,7 +95,7 @@ setNops(1, 0xe9); // jp (hl)
 setNops(3, 0x18); // jr n
 setNops(CALL_NOPS, 0xcd); // call nn
 setNops(4, ...inBits3To5(0xc7)); // rst p: 11 T-states, yet 4 NOPs (ADR 0002)
-setNops(3, 0xc9); // ret
+setNops(RET_NOPS, 0xc9); // ret
 
 // The condition codes NZ Z NC C PO PE P M test, in pairs, these bits of F.
 const CONDITION_FLAGS = [0x40, 0x01, 0x04, 0x80];

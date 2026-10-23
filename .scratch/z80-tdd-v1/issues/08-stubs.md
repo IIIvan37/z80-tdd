@@ -4,11 +4,11 @@
 
 **Blocked by:** 04 (Count NOPs for unprefixed instructions).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A test can declare a Stub at a label or at an address for one Run.
-- [ ] When PC reaches a Stub, the Run returns to the caller as a `RET` would.
-- [ ] A Stub can set chosen registers before returning.
-- [ ] The Run result lists every Stub call with the registers at the moment of the call, so a test can check that `play_sound` was called once with `A=3`.
-- [ ] A Stub call costs 3 NOPs by default, on top of the `CALL` the Routine paid; a test can give a Stub another duration.
-- [ ] A Routine calling a firmware address declared as a Stub (for example `#BB5A`) completes instead of running zeros.
+- [x] A test can declare a Stub at a label or at an address for one Run.
+- [x] When PC reaches a Stub, the Run returns to the caller as a `RET` would.
+- [x] A Stub can set chosen registers before returning.
+- [x] The Run result lists every Stub call with the registers at the moment of the call, so a test can check that `play_sound` was called once with `A=3`.
+- [x] A Stub call costs 3 NOPs by default, on top of the `CALL` the Routine paid; a test can give a Stub another duration.
+- [x] A Routine calling a firmware address declared as a Stub (for example `#BB5A`) completes instead of running zeros.
