@@ -192,19 +192,26 @@ const INDEXED_CB_NOPS: number[] = Array.from({ length: 256 }, (_, op) =>
   op >> 6 === 1 ? 6 : 7,
 );
 
+function byteAt(memory: Uint8Array, address: number): number {
+  return memory[address & 0xffff] ?? 0;
+}
+
 function entryAt(memory: Uint8Array, pc: number): Entry | undefined {
-  const at = (offset: number) => memory[(pc + offset) & 0xffff] ?? 0;
-  if (at(0) === CB) {
-    return CB_NOPS[at(1)];
+  const op = byteAt(memory, pc);
+  const next = byteAt(memory, pc + 1);
+  if (op === CB) {
+    return CB_NOPS[next];
   }
-  if (at(0) === ED) {
-    return ED_NOPS[at(1)];
+  if (op === ED) {
+    return ED_NOPS[next];
   }
-  if (INDEX_PREFIXES.includes(at(0))) {
+  if (INDEX_PREFIXES.includes(op)) {
     // DD CB n op: the displacement comes before the opcode.
-    return at(1) === CB ? INDEXED_CB_NOPS[at(3)] : INDEXED_NOPS[at(1)];
+    return next === CB
+      ? INDEXED_CB_NOPS[byteAt(memory, pc + 3)]
+      : INDEXED_NOPS[next];
   }
-  return UNPREFIXED_NOPS[at(0)];
+  return UNPREFIXED_NOPS[op];
 }
 
 /**
@@ -223,8 +230,8 @@ export function nopsOf(
   let pc = before.pc;
   let ignoredPrefixes = 0;
   while (
-    INDEX_PREFIXES.includes(memory[pc] ?? 0) &&
-    PREFIXES.includes(memory[(pc + 1) & 0xffff] ?? 0)
+    INDEX_PREFIXES.includes(byteAt(memory, pc)) &&
+    PREFIXES.includes(byteAt(memory, pc + 1))
   ) {
     ignoredPrefixes += 1;
     pc = (pc + 1) & 0xffff;

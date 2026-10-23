@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { type Assembler, rasmAssembler } from "./assembler/index.ts";
-import { isNopLimit, NOP_LIMIT_TAKES } from "./run.ts";
+import { isNopLimit, isWholeIn, NOP_LIMIT_TAKES } from "./run.ts";
 
 const FILE = "z80-tdd.config.ts";
 
@@ -19,7 +19,7 @@ export interface ConfigurationFile {
 }
 
 /** Each setting a Program needs: a test file's over the configuration file's, over the defaults. */
-export type ResolvedSettings = Required<ConfigurationFile>;
+type ResolvedSettings = Required<ConfigurationFile>;
 
 interface Setting {
   accepts(value: unknown): boolean;
@@ -38,10 +38,7 @@ const SETTINGS: Readonly<Record<keyof ConfigurationFile, Setting>> = {
     takes: "the path of a source file",
   },
   sp: {
-    accepts: (value) =>
-      Number.isInteger(value) &&
-      (value as number) >= 0 &&
-      (value as number) <= 0xffff,
+    accepts: (value) => isWholeIn(value, 0, 0xffff),
     takes: "#0000 to #FFFF",
   },
   nopLimit: { accepts: isNopLimit, takes: NOP_LIMIT_TAKES },

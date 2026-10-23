@@ -21,26 +21,34 @@ export const memoryMatchers = {
       ({ address }) => ((address - range.address) & 0xffff) >= range.length,
     );
     const span = `${hex(range.address)}-${hex((range.address + range.length - 1) & 0xffff)}`;
-    return {
-      pass: outside.length === 0,
-      message: () =>
-        outside.length === 0
-          ? `Memory changed only inside ${span}`
-          : [`Memory changed outside ${span}:`, ...lines(outside)].join("\n"),
-    };
+    return verdict(
+      outside,
+      `Memory changed only inside ${span}`,
+      `Memory changed outside ${span}:`,
+    );
   },
 
   toLeaveMemoryUnchanged(run: Run) {
-    const changes = run.memoryChanges;
-    return {
-      pass: changes.length === 0,
-      message: () =>
-        changes.length === 0
-          ? "Memory did not change"
-          : ["Memory changed:", ...lines(changes)].join("\n"),
-    };
+    return verdict(
+      run.memoryChanges,
+      "Memory did not change",
+      "Memory changed:",
+    );
   },
 };
+
+/** Passes when `changes` is empty; the message names each change otherwise. */
+function verdict(
+  changes: readonly MemoryChange[],
+  passed: string,
+  failed: string,
+) {
+  return {
+    pass: changes.length === 0,
+    message: () =>
+      changes.length === 0 ? passed : [failed, ...lines(changes)].join("\n"),
+  };
+}
 
 function lines(changes: readonly MemoryChange[]): string[] {
   return changes.map(

@@ -376,6 +376,11 @@ const TARGET = [0x00, 0x50];
 const SP_AFTER_CALL = [0xfe, 0xbf];
 const REGISTER_CODES = [0, 1, 2, 3, 4, 5, 7]; // B C D E H L A; 6 is (HL)
 
+const hexBytes = (bytes: readonly number[]) =>
+  bytes
+    .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
+    .join("");
+
 const each = (
   name: string,
   opcodes: readonly number[],
@@ -383,7 +388,7 @@ const each = (
   operands: readonly number[] = [],
 ): TimingCase[] =>
   opcodes.map((opcode) => ({
-    name: `${name} (#${opcode.toString(16).toUpperCase().padStart(2, "0")})`,
+    name: `${name} (#${hexBytes([opcode])})`,
     code: [opcode, ...operands],
     nops,
   }));
@@ -430,7 +435,7 @@ const FIXED_TIMINGS: readonly TimingCase[] = [
   ...each("alu (hl)", withBits3To5In(0x86), 2 + RET_NOPS),
   ...each("alu n", withBits3To5In(0xc6), 2 + RET_NOPS, [0x12]),
   ...[0xc5, 0xd5, 0xe5, 0xf5].map((push) => ({
-    name: `push qq, pop qq (#${push.toString(16).toUpperCase()})`,
+    name: `push qq, pop qq (#${hexBytes([push])})`,
     code: [push, push - 4],
     nops: 4 + 3 + RET_NOPS,
   })),
@@ -554,11 +559,6 @@ describe("the NOPs of an unprefixed instruction", () => {
     runsInItsNops,
   );
 });
-
-const hexBytes = (bytes: readonly number[]) =>
-  bytes
-    .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
-    .join("");
 
 // Keep memory accesses and block instructions away from the code.
 const POINTERS: StartRegisters = { bc: 0x0005, de: 0x7000, hl: 0x6000 };

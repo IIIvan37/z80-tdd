@@ -45,7 +45,7 @@ export interface RunOptions {
   readonly registers?: StartRegisters;
   /** Applied after `registers`, so they override the matching bits of F. */
   readonly flags?: Partial<Flags>;
-  /** The longest the Run may last, in NOPs; 1,000,000 by default. */
+  /** The longest the Run may last, in NOPs; the Program's NOP limit by default. */
   readonly nopLimit?: number;
   /** Bytes written into memory before the Run, at a label or an address. */
   readonly memory?: readonly MemoryWrite[];
@@ -98,7 +98,20 @@ export const NOP_LIMIT_TAKES = "a whole number of NOPs, 0 or more";
 
 /** Whether `value` can be a NOP limit; one that is not would never stop a Run. */
 export function isNopLimit(value: unknown): value is number {
-  return Number.isInteger(value) && (value as number) >= 0;
+  return isWholeIn(value, 0, Number.POSITIVE_INFINITY);
+}
+
+/** Whether `value` is a whole number from `min` to `max`. */
+export function isWholeIn(
+  value: unknown,
+  min: number,
+  max: number,
+): value is number {
+  return (
+    Number.isInteger(value) &&
+    (value as number) >= min &&
+    (value as number) <= max
+  );
 }
 
 /** Runs the Routine at `entry` on a fresh copy of `loaded` until it returns. */
@@ -122,27 +135,26 @@ export function run(
 
   const callerSp = options.registers?.sp ?? loaded.sp;
   const sp = (callerSp - 2) & 0xffff;
-  for (const [address, byte] of [
-    [sp, SENTINEL & 0xff],
-    [(sp + 1) & 0xffff, SENTINEL >> 8],
-  ] as const) {
+  const returnAddressAt = [sp, (sp + 1) & 0xffff] as const;
+  for (const address of returnAddressAt) {
     if (loaded.occupies(address)) {
       throw new Error(
         `The return address pushed at ${hex(address)} would overwrite the Program; set another SP`,
       );
     }
-    memory[address] = byte;
   }
+  memory[returnAddressAt[0]] = SENTINEL & 0xff;
+  memory[returnAddressAt[1]] = SENTINEL >> 8;
   for (const { at, bytes } of options.memory ?? []) {
     const start = toAddress(at);
     for (const [i, byte] of bytes.entries()) {
       const address = (start + i) & 0xffff;
-      if (!(Number.isInteger(byte) && byte >= 0 && byte <= 0xff)) {
+      if (!isWholeIn(byte, 0, 0xff)) {
         throw new Error(
           `The byte at ${hex(address)} cannot be ${byte}: it takes 0 to 255`,
         );
       }
-      if (address === sp || address === ((sp + 1) & 0xffff)) {
+      if (returnAddressAt.includes(address)) {
         throw new Error(
           `The bytes written at ${hex(start)} would overwrite the return address pushed at ${hex(sp)}; set another SP`,
         );
@@ -240,7 +252,9 @@ class Stack {
 
 function changes(initial: Uint8Array, final: Uint8Array): MemoryChange[] {
   const result: MemoryChange[] = [];
-  for (const [address, after] of final.entries()) {
+  // An indexed loop: entries() would allocate a pair for each of the 65,536 bytes.
+  for (let address = 0; address < final.length; address++) {
+    const after = final[address] ?? 0;
     const before = initial[address] ?? 0;
     if (after !== before) {
       result.push(Object.freeze({ address, before, after }));
@@ -272,29 +286,37 @@ const REPORTED_REGISTERS: readonly (readonly [string, keyof Registers])[][] = [
 
 /** The last instructions executed, with the bytes they had when they ran. */
 class History {
-  private readonly entries: { address: number; bytes: number[] }[] = [];
-  private next = 0;
+  // A ring buffer allocated once: record() runs on every step of a Run.
+  private readonly addresses = new Uint16Array(HISTORY_LENGTH);
+  private readonly bytes = new Uint8Array(HISTORY_LENGTH * LONGEST_INSTRUCTION);
+  private recorded = 0;
 
   record(memory: Uint8Array, address: number): void {
-    const bytes = Array.from(
-      { length: LONGEST_INSTRUCTION },
-      (_, i) => memory[(address + i) & 0xffff] ?? 0,
-    );
-    this.entries[this.next] = { address, bytes };
-    this.next = (this.next + 1) % HISTORY_LENGTH;
+    const slot = this.recorded % HISTORY_LENGTH;
+    this.addresses[slot] = address;
+    for (let i = 0; i < LONGEST_INSTRUCTION; i++) {
+      this.bytes[slot * LONGEST_INSTRUCTION + i] =
+        memory[(address + i) & 0xffff] ?? 0;
+    }
+    this.recorded++;
   }
 
   /** One line per instruction, oldest first: address, nearest label, mnemonic. */
   lines(loaded: LoadedProgram): string[] {
-    const oldestFirst = [
-      ...this.entries.slice(this.next),
-      ...this.entries.slice(0, this.next),
-    ];
-    const rows = oldestFirst.map(({ address, bytes }) => ({
-      address,
-      label: loaded.labelNear(address),
-      text: disassemble(address, bytes).text,
-    }));
+    const count = Math.min(this.recorded, HISTORY_LENGTH);
+    const rows = Array.from({ length: count }, (_, i) => {
+      const slot = (this.recorded - count + i) % HISTORY_LENGTH;
+      const address = this.addresses[slot] ?? 0;
+      const start = slot * LONGEST_INSTRUCTION;
+      const bytes = [
+        ...this.bytes.subarray(start, start + LONGEST_INSTRUCTION),
+      ];
+      return {
+        address,
+        label: loaded.labelNear(address),
+        text: disassemble(address, bytes).text,
+      };
+    });
     const width = Math.max(0, ...rows.map(({ label }) => label.length));
     return rows.map(
       ({ address, label, text }) =>
@@ -338,10 +360,7 @@ function checkWidths(registers: StartRegisters): void {
   ] as const) {
     for (const name of names) {
       const value = (registers as Partial<Registers>)[name];
-      if (
-        value !== undefined &&
-        !(Number.isInteger(value) && value >= 0 && value <= max)
-      ) {
+      if (value !== undefined && !isWholeIn(value, 0, max)) {
         throw new Error(
           `Register ${name} cannot hold ${value}: it takes 0 to ${max}`,
         );

@@ -118,20 +118,31 @@ export default defineConfig({ ${settings} });
     expect(program.run("set_a").registers.sp).toBe(0x8000);
   });
 
-  it("fails on an SP that is not an address, naming the setting", async () => {
-    await configure(`source: "main.asm", sp: 0x10000`);
-
-    await expect(loadProgram()).rejects.toThrow(
+  it.each([
+    [
+      "an SP that is not an address",
+      `source: "main.asm", sp: 0x10000`,
       /"sp" of z80-tdd\.config\.ts cannot be 65536/,
-    );
-  });
-
-  it("fails on a NOP limit that is not a whole number of NOPs, naming the setting", async () => {
-    await configure(`source: "main.asm", nopLimit: 1.5`);
-
-    await expect(loadProgram()).rejects.toThrow(
+    ],
+    [
+      "a NOP limit that is not a whole number of NOPs",
+      `source: "main.asm", nopLimit: 1.5`,
       /"nopLimit" of z80-tdd\.config\.ts cannot be 1\.5/,
-    );
+    ],
+    [
+      "a source that is not a file name",
+      `source: 42`,
+      /"source" of z80-tdd\.config\.ts cannot be 42/,
+    ],
+    [
+      "an assembler that is not an Assembler",
+      `assembler: "/opt/rasm", source: "main.asm"`,
+      /"assembler" of z80-tdd\.config\.ts cannot be "\/opt\/rasm".*rasmAssembler/,
+    ],
+  ])("fails on %s, naming the setting", async (_, settings, message) => {
+    await configure(settings);
+
+    await expect(loadProgram()).rejects.toThrow(message);
   });
 
   it("fails on a setting it does not know, naming it", async () => {
@@ -142,22 +153,6 @@ export default defineConfig({ ${settings} });
 
     await expect(loadProgram()).rejects.toThrow(
       /"nopLimits" of z80-tdd\.config\.ts is not a setting/,
-    );
-  });
-
-  it("fails on a source that is not a file name, naming the setting", async () => {
-    await configure(`source: 42`);
-
-    await expect(loadProgram()).rejects.toThrow(
-      /"source" of z80-tdd\.config\.ts cannot be 42/,
-    );
-  });
-
-  it("fails on an assembler that is not an Assembler, naming the setting", async () => {
-    await configure(`assembler: "/opt/rasm", source: "main.asm"`);
-
-    await expect(loadProgram()).rejects.toThrow(
-      /"assembler" of z80-tdd\.config\.ts cannot be "\/opt\/rasm".*rasmAssembler/,
     );
   });
 

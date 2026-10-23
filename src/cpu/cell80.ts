@@ -100,6 +100,7 @@ function instantiate(ports: Ports): Exports {
 // Disassembling allocates, which can grow the WebAssembly memory and detach every view
 // on it; so it runs in an instance of its own, and a Cpu's views stay valid.
 let disassembler: Exports | undefined;
+const DECODER = new TextDecoder();
 
 /** Disassembles the instruction made of `bytes` (only the ones it spans are read) at `address`. */
 export function disassemble(
@@ -120,7 +121,7 @@ export function disassemble(
   );
   return {
     // cell80 writes `$` before a hexadecimal number; CPC assemblers write `#`.
-    text: new TextDecoder().decode(text).replaceAll("$", "#"),
+    text: DECODER.decode(text).replaceAll("$", "#"),
     length: lengths >> 8,
   };
 }

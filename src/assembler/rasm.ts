@@ -17,6 +17,15 @@ const SYMBOL_LINE =
   /^(?!SYNCHRO |RASM_VERSION )(\S+) #([0-9A-F]+) B\d+ [LA]$/gm;
 const ERROR_LINE = /^\[(.+):(\d+)\] (.*)$/gm;
 const DOWNLOAD = "https://github.com/EdouardBERGE/rasm/releases";
+const ARGS = ["program.asm", "-map", "-s", "-sq", "-os", "symbols.txt"];
+
+/** What `execFile` rejects with. */
+interface RasmError {
+  readonly code?: unknown;
+  readonly message: string;
+  readonly stdout?: string;
+  readonly stderr?: string;
+}
 
 export interface RasmOptions {
   /** Where the `rasm` binary is, from the working directory; by default, `rasm` on the PATH. */
@@ -38,44 +47,18 @@ export function rasmAssembler({ path = "rasm" }: RasmOptions = {}): Assembler {
           join(dir, "program.asm"),
           ` include ${quoted(resolve(source))}\n save 'memory.bin',0,65536\n`,
         );
-        const { stdout } = await execFileAsync(
-          command,
-          ["program.asm", "-map", "-s", "-sq", "-os", "symbols.txt"],
-          { cwd: dir },
-        ).catch(
-          (error: {
-            code?: unknown;
-            message: string;
-            stdout?: string;
-            stderr?: string;
-          }) => {
-            if (error.code === "ENOENT") {
-              throw new Error(
-                `RASM was not found at "${path}": download it from ${DOWNLOAD}, then put it on the PATH or give its path`,
-              );
-            }
-            const output = stripVTControlCharacters(
-              `${error.stdout ?? ""}\n${error.stderr ?? ""}`,
-            ).trim();
-            const errors = [...output.matchAll(ERROR_LINE)].map(
-              ([, file, line, message]) => `${file}:${line}: ${message}`,
-            );
-            // Without a line to point at, what rasm said, or why it did not run.
-            const reason =
-              errors.length > 0 ? errors.join("\n") : output || error.message;
-            throw new Error(`RASM could not assemble ${source}:\n${reason}`);
-          },
-        );
-        const memory = await readFile(join(dir, "memory.bin"));
-        const symbols = await readFile(join(dir, "symbols.txt"), "utf8");
+        const { stdout } = await execFileAsync(command, ARGS, {
+          cwd: dir,
+        }).catch((error: RasmError) => {
+          throw failureOf(error, path, source);
+        });
+        const [memory, symbols] = await Promise.all([
+          readFile(join(dir, "memory.bin")),
+          readFile(join(dir, "symbols.txt"), "utf8"),
+        ]);
         return {
           blocks: blocksOf(stripVTControlCharacters(stdout), memory),
-          symbols: Object.fromEntries(
-            [...symbols.matchAll(SYMBOL_LINE)].map(([, label, address]) => [
-              label,
-              Number.parseInt(address as string, 16),
-            ]),
-          ),
+          symbols: symbolsOf(symbols),
         };
       } finally {
         await rm(dir, { recursive: true, force: true });
@@ -93,6 +76,37 @@ function quoted(path: string): string {
     return `"${path}"`;
   }
   throw new Error(`RASM cannot include ${path}: its path holds both ' and "`);
+}
+
+function failureOf(error: RasmError, path: string, source: string): Error {
+  if (error.code === "ENOENT") {
+    return new Error(
+      `RASM was not found at "${path}": download it from ${DOWNLOAD}, then put it on the PATH or give its path`,
+    );
+  }
+  const output = stripVTControlCharacters(
+    `${error.stdout ?? ""}\n${error.stderr ?? ""}`,
+  ).trim();
+  const errors = errorsOf(output);
+  // Without a line to point at, what rasm said, or why it did not run.
+  const reason =
+    errors.length > 0 ? errors.join("\n") : output || error.message;
+  return new Error(`RASM could not assemble ${source}:\n${reason}`);
+}
+
+function errorsOf(output: string): string[] {
+  return [...output.matchAll(ERROR_LINE)].map(
+    ([, file, line, message]) => `${file}:${line}: ${message}`,
+  );
+}
+
+function symbolsOf(text: string): Record<string, number> {
+  return Object.fromEntries(
+    [...text.matchAll(SYMBOL_LINE)].map(([, label, address]) => [
+      label,
+      Number.parseInt(address as string, 16),
+    ]),
+  );
 }
 
 function blocksOf(map: string, memory: Uint8Array): Block[] {
