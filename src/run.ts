@@ -459,7 +459,7 @@ class History {
       return {
         address,
         label: loaded.labelNear(address),
-        text: this.stubbed[slot] ? "Stub" : disassemble(address, bytes).text,
+        text: this.stubbed[slot] ? "Stub" : disassemble(address, bytes),
       };
     });
     const width = Math.max(0, ...rows.map(({ label }) => label.length));
