@@ -6,7 +6,7 @@
 ## Où on en est
 
 Les tickets 01 à 06, 09 et 10 sont livrés par la PR #1 du dépôt privé `IIIvan37/z80-tdd`, le ticket 07 (Ports) par la PR #4,
-le ticket 08 (Stubs) par la PR #5. Le ticket 11, dernier de la v1, est fini sur `feat/ticket-11-example-project`, PR à ouvrir :
+le ticket 08 (Stubs) par la PR #5, le ticket 11, dernier de la v1, par la PR #6 :
 projet CPC `example/` testé sur le paquet bâti dans `pnpm gate`, README d'installation, `LICENSE` MIT, `pnpm build` réparé.
 La CI GitHub ne tourne qu'au merge dans `main`, hors Markdown seul ; avant une PR, `pnpm gate` local est le seul contrôle.
 Gate local vert : 2 002 tests, plus 6 dans l'exemple. Le cœur Z80 reste cell80-z80 en WebAssembly (ADR 0004).
@@ -15,7 +15,8 @@ spec : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md).
 
 ## Prochaine action
 
-Pousser `feat/ticket-11-example-project` et ouvrir sa PR vers `main`, après accord de l'utilisateur (compte IIIvan37).
+Revue de fin de jalon v1 : `mattpocock-skills:code-review` et `security-review` sur tout le diff de la v1, puis corriger les constats bloquants.
+Ensuite, l'utilisateur lance `/mattpocock-skills:improve-codebase-architecture` (skill qu'il invoque lui-même) ; hot spot : `src/run.ts`.
 
 ## Questions ouvertes
 
@@ -25,9 +26,9 @@ Pousser `feat/ticket-11-example-project` et ouvrir sa PR vers `main`, après acc
 
 ## Tickets
 
-- Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4), 08 (PR #5), 11 (sur sa branche, PR à ouvrir).
+- Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4), 08 (PR #5), 11 (PR #6).
 - Démarrables : aucun ; les onze tickets de la v1 sont `done`.
-- Prochain : revue de fin de jalon v1 (`mattpocock-skills:code-review` + `security-review`), après le merge du 11.
+- Prochain : aucun ticket ; revue de fin de jalon v1, puis `improve-codebase-architecture`.
 
 ## Historique
 
@@ -44,4 +45,4 @@ Pousser `feat/ticket-11-example-project` et ouvrir sa PR vers `main`, après acc
 - 2026-10-23 · **CI au merge** : CI au seul merge dans `main`, sans les changements Markdown, PR #3.
 - 2026-10-23 · **ticket 07** : Port writes, Port reads par séquence ou fonction, Port mask `#FF00` (ADR 0007), PR #4.
 - 2026-10-23 · **ticket 08** : Stubs par label ou adresse, `stubCalls`, coût d'un `RET` par défaut, ligne `Stub` du rapport, PR #5.
-- 2026-10-23 · **ticket 11** : projet d'exemple sur le paquet bâti, `pnpm build` réparé, `LICENSE`, README, revue faite.
+- 2026-10-23 · **ticket 11** : projet d'exemple sur le paquet bâti, `pnpm build` réparé, `LICENSE`, README, PR #6.
