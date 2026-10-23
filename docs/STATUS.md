@@ -6,7 +6,7 @@
 ## Où on en est
 
 Les onze tickets de la v1 sont livrés : 01 à 06, 09 et 10 par la PR #1, 07 par la PR #4, 08 par la PR #5, 11 par la PR #6.
-La revue de fin de jalon v1 (code-review et security-review sur tout le diff) est livrée par une PR de la branche `review/v1-milestone`.
+La revue de fin de jalon v1 (code-review et security-review sur tout le diff) est livrée par la PR #7.
 Elle corrige deux constats bloquants : le fichier de configuration se cherche vers le haut et fixe la racine du projet (ADR 0008),
 et le matcher `toHaveRegisters` s'ajoute à `runMatchers` (ex-`memoryMatchers`). Aucune vulnérabilité trouvée.
 La CI GitHub ne tourne qu'au merge dans `main`, hors Markdown seul ; avant une PR, `pnpm gate` local est le seul contrôle.
@@ -26,7 +26,7 @@ L'utilisateur lance `/mattpocock-skills:improve-codebase-architecture` sur `src/
 
 ## Tickets
 
-- Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4), 08 (PR #5), 11 (PR #6).
+- Livrés : 01 à 06, 09 et 10 (PR #1), 07 (PR #4), 08 (PR #5), 11 (PR #6) ; revue de jalon v1 (PR #7).
 - Démarrables : aucun ; les onze tickets de la v1 sont `done`.
 - Prochain : aucun ticket ; la passe d'architecture sur `src/run.ts` vient d'abord.
 
@@ -46,4 +46,4 @@ L'utilisateur lance `/mattpocock-skills:improve-codebase-architecture` sur `src/
 - 2026-10-23 · **ticket 07** : Port writes, Port reads par séquence ou fonction, Port mask `#FF00` (ADR 0007), PR #4.
 - 2026-10-23 · **ticket 08** : Stubs par label ou adresse, `stubCalls`, coût d'un `RET` par défaut, ligne `Stub` du rapport, PR #5.
 - 2026-10-23 · **ticket 11** : projet d'exemple sur le paquet bâti, `pnpm build` réparé, `LICENSE`, README, PR #6.
-- 2026-10-23 · **revue de jalon v1** : code-review et security-review de la v1, configuration cherchée vers le haut (ADR 0008), `toHaveRegisters`.
+- 2026-10-23 · **revue de jalon v1** : code-review et security-review de la v1, configuration cherchée vers le haut (ADR 0008), `toHaveRegisters`, PR #7.
