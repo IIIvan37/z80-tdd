@@ -167,33 +167,8 @@ export function run(
 
   const callerSp = options.registers?.sp ?? loaded.sp;
   const sp = (callerSp - 2) & 0xffff;
-  const returnAddressAt = [sp, (sp + 1) & 0xffff] as const;
-  for (const address of returnAddressAt) {
-    if (loaded.occupies(address)) {
-      throw new Error(
-        `The return address pushed at ${hex(address)} would overwrite the Program; set another SP`,
-      );
-    }
-  }
-  memory[returnAddressAt[0]] = SENTINEL & 0xff;
-  memory[returnAddressAt[1]] = SENTINEL >> 8;
-  for (const { at, bytes } of options.memory ?? []) {
-    const start = toAddress(at);
-    for (const [i, byte] of bytes.entries()) {
-      const address = (start + i) & 0xffff;
-      if (!isByte(byte)) {
-        throw new Error(
-          `The byte at ${hex(address)} cannot be ${byte}: it takes ${BYTE_TAKES}`,
-        );
-      }
-      if (returnAddressAt.includes(address)) {
-        throw new Error(
-          `The bytes written at ${hex(start)} would overwrite the return address pushed at ${hex(sp)}; set another SP`,
-        );
-      }
-      memory[address] = byte;
-    }
-  }
+  const returnAddressAt = pushSentinel(memory, loaded, sp);
+  writeTestBytes(memory, options.memory ?? [], toAddress, returnAddressAt);
   setState(cpu, { ...options.registers, sp, pc: entry }, options.flags);
 
   const initial = memory.slice();
@@ -574,6 +549,51 @@ function report(
     "Registers:",
     ...lines,
   ].join("\n");
+}
+
+/** Writes the sentinel return address at `sp` and gives where; fails if it would overwrite the Program. */
+function pushSentinel(
+  memory: Uint8Array,
+  loaded: LoadedProgram,
+  sp: number,
+): readonly [number, number] {
+  const returnAddressAt = [sp, (sp + 1) & 0xffff] as const;
+  for (const address of returnAddressAt) {
+    if (loaded.occupies(address)) {
+      throw new Error(
+        `The return address pushed at ${hex(address)} would overwrite the Program; set another SP`,
+      );
+    }
+  }
+  memory[returnAddressAt[0]] = SENTINEL & 0xff;
+  memory[returnAddressAt[1]] = SENTINEL >> 8;
+  return returnAddressAt;
+}
+
+/** Writes the test's bytes before the Run; fails on a value that is not a byte, or on the return address. */
+function writeTestBytes(
+  memory: Uint8Array,
+  writes: readonly MemoryWrite[],
+  toAddress: (at: LabelOrAddress) => number,
+  returnAddressAt: readonly [number, number],
+): void {
+  for (const { at, bytes } of writes) {
+    const start = toAddress(at);
+    for (const [i, byte] of bytes.entries()) {
+      const address = (start + i) & 0xffff;
+      if (!isByte(byte)) {
+        throw new Error(
+          `The byte at ${hex(address)} cannot be ${byte}: it takes ${BYTE_TAKES}`,
+        );
+      }
+      if (returnAddressAt.includes(address)) {
+        throw new Error(
+          `The bytes written at ${hex(start)} would overwrite the return address pushed at ${hex(returnAddressAt[0])}; set another SP`,
+        );
+      }
+      memory[address] = byte;
+    }
+  }
 }
 
 /** Sets `registers`, then the `flags` over the bits of F. */
