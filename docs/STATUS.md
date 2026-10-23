@@ -6,7 +6,8 @@
 ## Où on en est
 
 Les tickets 01 à 10 sont dans `main` du dépôt privé `IIIvan37/z80-tdd`, livrés par la PR #1 avec un passage de `simplify` et un README.
-La CI GitHub tourne `pnpm gate` et le job `core` (cell80.wasm recompilé et comparé, SingleStepTests) : verte à sa première exécution.
+La CI GitHub (`pnpm gate`, puis le job `core` : cell80.wasm recompilé et comparé) ne tourne qu'au merge dans `main`, hors Markdown seul.
+Avant une PR, `pnpm gate` local est le seul contrôle.
 Gate local vert, 1 961 tests. Le cœur Z80 reste cell80-z80 en WebAssembly (ADR 0004).
 Modules : [docs/MODULES.md](MODULES.md), règles : [CODING_STANDARDS.md](../CODING_STANDARDS.md),
 spec : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md).
@@ -40,3 +41,4 @@ Ticket 07 (Ports), sur une branche partie de `main`.
 - 2026-10-23 · **ticket 09** : Assembler RASM (fichier englobant, listing `-map`), labels sans casse (ADR 0006), RASM v3.3.1 en CI, revue corrigée.
 - 2026-10-23 · **ticket 10** : fichier de configuration, réglages contrôlés par une table, chemin relatif de `rasm` corrigé, revue corrigée.
 - 2026-10-23 · **première PR** : dépôt distant, `simplify` sur tout le code (*ring buffer*, `isWholeIn`), README, CI verte, PR #1.
+- 2026-10-23 · **CI au merge** : CI au seul merge dans `main`, sans les changements Markdown, PR #3.
