@@ -548,7 +548,12 @@ function loadTimingCase(code: readonly number[]) {
 async function runsInItsNops(timing: TimingCase) {
   const program = await loadTimingCase(timing.code);
 
-  const run = program.run("code", timing);
+  // Under the port mask 0, the one port 0 answers every IN.
+  const run = program.run("code", {
+    ...timing,
+    portMask: 0,
+    ports: { 0: () => 0xff },
+  });
 
   expect(run.nops).toBe(timing.nops);
 }

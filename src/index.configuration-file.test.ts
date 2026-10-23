@@ -9,7 +9,7 @@ import { loadProgram } from "./index.ts";
 const API = pathToFileURL(join(import.meta.dirname, "index.ts")).href;
 
 // `ld a,#2a : ret` at #4000, labelled `set_a`, in main.asm;
-// `ld a,#99 : ret` in other.asm.
+// `ld a,#99 : ret` in other.asm; `in a,(c) : ret`, labelled `read_port`, in ports.asm.
 const ASSEMBLER = `inMemoryAssembler({
   "main.asm": {
     blocks: [{ address: 0x4000, bytes: [0x3e, 0x2a, 0xc9] }],
@@ -18,6 +18,10 @@ const ASSEMBLER = `inMemoryAssembler({
   "other.asm": {
     blocks: [{ address: 0x4000, bytes: [0x3e, 0x99, 0xc9] }],
     symbols: { set_a: 0x4000 },
+  },
+  "ports.asm": {
+    blocks: [{ address: 0x4000, bytes: [0xed, 0x78, 0xc9] }],
+    symbols: { read_port: 0x4000 },
   },
 })`;
 
@@ -109,6 +113,35 @@ export default defineConfig({ ${settings} });
     expect(program.run("set_a").registers.sp).toBe(0x9000);
   });
 
+  it("sets the port mask a Port read matches on", async () => {
+    await configure(
+      `assembler: ${ASSEMBLER}, source: "ports.asm", portMask: 0xffff`,
+    );
+
+    const program = await loadProgram();
+    const run = program.run("read_port", {
+      registers: { bc: 0xf53c },
+      ports: { 0xf500: [0x01], 0xf53c: [0x07] },
+    });
+
+    expect(run.registers.a).toBe(0x07);
+  });
+
+  it("gives way to the port mask of a test file, and of a Run", async () => {
+    await configure(
+      `assembler: ${ASSEMBLER}, source: "ports.asm", portMask: 0xffff`,
+    );
+    const options = { registers: { bc: 0xf53c }, ports: { 0xf500: [0x01] } };
+
+    const testFile = await loadProgram({ portMask: 0xff00 });
+    const configured = await loadProgram();
+
+    expect(testFile.run("read_port", options).registers.a).toBe(0x01);
+    expect(
+      configured.run("read_port", { ...options, portMask: 0xff00 }).registers.a,
+    ).toBe(0x01);
+  });
+
   it("keeps a setting that a test file leaves undefined", async () => {
     await configure(`assembler: ${ASSEMBLER}, source: "main.asm", sp: 0x8000`);
 
@@ -128,6 +161,11 @@ export default defineConfig({ ${settings} });
       "a NOP limit that is not a whole number of NOPs",
       `source: "main.asm", nopLimit: 1.5`,
       /"nopLimit" of z80-tdd\.config\.ts cannot be 1\.5/,
+    ],
+    [
+      "a port mask that is not 16 bits wide",
+      `source: "main.asm", portMask: 0x1ff00`,
+      /"portMask" of z80-tdd\.config\.ts cannot be 130816/,
     ],
     [
       "a source that is not a file name",

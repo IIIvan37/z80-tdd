@@ -2,7 +2,7 @@
 
 Write the Z80 assembly of an Amstrad CPC project test-first. Each Vitest test runs a Routine of your real project on an emulated Z80, then checks the registers, flags, memory and duration in NOPs it leaves behind.
 
-> **Status:** v1 in progress, not on npm yet. Registers, flags, memory, NOP counts, the NOP limit, RASM and the configuration file work. Ports, Stubs and an example project are still to come.
+> **Status:** v1 in progress, not on npm yet. Registers, flags, memory, NOP counts, the NOP limit, ports, RASM and the configuration file work. Stubs and an example project are still to come.
 
 ## What a test looks like
 
@@ -77,11 +77,12 @@ export default defineConfig({
   source: "src/main.asm",                           // what loadProgram() assembles
   sp: 0xc000,                                       // the SP a Run starts with; #C000 by default
   nopLimit: 1_000_000,                              // the longest a Run may last; 1,000,000 NOPs by default
+  portMask: 0xff00,                                 // the bits a Port read matches on; #FF00 by default
 });
 ```
 
 - A test file overrides any setting: `loadProgram({ source: "src/clear.asm" })`.
-- A Run overrides the SP and the NOP limit: `program.run("clear_buffer", { registers: { sp: 0x8000 }, nopLimit: 500 })`.
+- A Run overrides the SP, the NOP limit and the Port mask: `program.run("clear_buffer", { registers: { sp: 0x8000 }, nopLimit: 500 })`.
 - z80-tdd reads the file in the working directory, where Vitest runs. A path to `rasm` that holds a folder is read from there too.
 - A setting it does not know, or a value it refuses, fails the test and names the setting.
 
@@ -97,6 +98,8 @@ export default defineConfig({
 | `flags` | Bits of F, after `registers`: `{ c: true, z: false }` |
 | `memory` | Bytes at a label or an address: `[{ at: "table", bytes: [1, 2] }, { at: 0x5000, bytes: [3] }]` |
 | `nopLimit` | The longest the Run may last, in NOPs |
+| `ports` | What each `IN` returns, by port: values in order, or a function (see below) |
+| `portMask` | The bits of a port address a Port read matches on |
 
 | Result | What it holds |
 |---|---|
@@ -105,12 +108,29 @@ export default defineConfig({
 | `nopsWithCall` | `nops` plus the 5 NOPs of the `CALL` that enters the Routine |
 | `memoryChanges` | Each byte the Run changed, as `{ address, before, after }`, except the stack the Routine used |
 | `memory(at, length)` | The bytes at a label or an address once the Routine has returned |
+| `portWrites` | Each `OUT`, in order, as `{ address, value }` with the full 16-bit port address |
+
+### Ports
+
+A test supplies what each `IN` returns. A Port read matches its address under the Port mask, `#FF00` by default, as the CPC decodes: the key `0xf500` answers `IN A,(C)` with B at `#F5`, whatever C holds ([ADR 0007](docs/adr/0007-port-reads-match-on-a-port-mask.md)).
+
+```ts
+// wait_vsync polls PPI port B until bit 0 is set
+program.run("wait_vsync", { ports: { 0xf500: [0x00, 0x00, 0x01] } });
+
+// the keyboard line depends on the PSG register the Routine selected
+program.run("read_keys", {
+  ports: { 0xf400: ({ address, writes }) => (writes.at(-1)?.value === 0x0e ? 0xfb : 0xff) },
+});
+```
+
+A read from a port the test did not supply, or past the end of its values, fails the Run with the port address and the PC. Set `portMask: 0xffff` to match the full address, as the FDC ports `#FB7E` and `#FB7F` need.
 
 Two Matchers check Memory changes: `toChangeOnly(program.range(label, length))` and `toLeaveMemoryUnchanged()`. Install them with `expect.extend(memoryMatchers)`.
 
 ## When a Run fails
 
-A Run that lasts longer than its NOP limit fails the test with the last instructions executed and the registers. Here, `clear_buffer` without its `dec bc`:
+A Run that lasts longer than its NOP limit, or reads a port the test did not supply, fails the test with the last instructions executed and the registers. Here, `clear_buffer` without its `dec bc`:
 
 ```text
 The Run reached its NOP limit of 500 NOPs

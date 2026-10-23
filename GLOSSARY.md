@@ -17,7 +17,7 @@ The external program that turns the CPC project's source into machine code and a
 _Avoid_: Compiler, toolchain
 
 **Configuration file**:
-The typed `z80-tdd.config.ts` at the root of the CPC project, holding the **Assembler**, the default source file, the default SP and the default **NOP limit**; a test file or a **Run** can override each.
+The typed `z80-tdd.config.ts` at the root of the CPC project, holding the **Assembler**, the default source file, the default SP, the default **NOP limit** and the **Port mask**; a test file or a **Run** can override each.
 _Avoid_: Settings file, config
 
 **CPU**:
@@ -53,3 +53,6 @@ A value the **Routine** sends to an I/O port with `OUT`, recorded so a test can 
 
 **Port read**:
 A value the **Routine** receives from an I/O port with `IN`, supplied by the test.
+
+**Port mask**:
+The bits of a port address a **Port read** matches on, `#FF00` by default as the CPC decodes; see ADR 0007. The test supplies each port under its address once masked, its key: `0xf500` answers `#F5xx`.
