@@ -118,3 +118,27 @@ pub extern "C" fn write_state() {
 pub extern "C" fn step() {
     cpu().step(&mut Bus)
 }
+
+/// Room for the longest mnemonic `disassemble` writes, such as `LD (IX+$7F),$FF`.
+const TEXT_LENGTH: usize = 32;
+
+static mut TEXT: [u8; TEXT_LENGTH] = [0; TEXT_LENGTH];
+
+#[no_mangle]
+pub extern "C" fn text_ptr() -> *mut u8 {
+    addr_of_mut!(TEXT) as *mut u8
+}
+
+/// Disassembles the instruction at `pc` made of `bytes` (up to four, first byte lowest)
+/// into `TEXT`. Returns the instruction's length in bytes << 8 | the text's length.
+#[no_mangle]
+pub extern "C" fn disassemble(pc: u32, bytes: u32) -> u32 {
+    let bytes = bytes.to_le_bytes();
+    let disasm = z80::disassemble(pc as u16, |address| {
+        bytes[address.wrapping_sub(pc as u16) as usize & 3]
+    });
+    let text = disasm.text.as_bytes();
+    let length = text.len().min(TEXT_LENGTH);
+    unsafe { (&mut *addr_of_mut!(TEXT))[..length].copy_from_slice(&text[..length]) };
+    (disasm.len as u32) << 8 | length as u32
+}

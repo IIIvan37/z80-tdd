@@ -1,5 +1,5 @@
 import type { Assembler } from "./assembler/index.ts";
-import { type LoadedMemory, type Run, type RunOptions, run } from "./run.ts";
+import { type LoadedProgram, type Run, type RunOptions, run } from "./run.ts";
 
 export interface Program {
   /** The address of `label`; fails if the Program has no such label. */
@@ -24,9 +24,21 @@ export async function loadProgram({
     memory.set(block.bytes, block.address);
     occupied.fill(1, block.address, block.address + block.bytes.length);
   }
-  const loaded: LoadedMemory = {
+  const byAddress = Object.entries(assembly.symbols).sort(
+    ([, a], [, b]) => a - b,
+  );
+  const loaded: LoadedProgram = {
     bytes: memory,
     occupies: (address) => occupied[address] === 1,
+    labelNear: (address) => {
+      const below = byAddress.findLast(([, at]) => at <= address);
+      if (below === undefined) {
+        return "";
+      }
+      // Of several labels at that address, the first in the symbol table.
+      const [label, at] = byAddress.find(([, at]) => at === below[1]) ?? below;
+      return at === address ? label : `${label}+${address - at}`;
+    },
   };
 
   const addressOf = (label: string): number => {

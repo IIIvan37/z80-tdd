@@ -555,4 +555,158 @@ describe("a Run reaching a prefixed instruction", () => {
       );
     },
   );
+
+  it("fails with the failure report", async () => {
+    const program = await loadTimingCase([NOP, 0xcb, 0x00]);
+
+    const failure = () => program.run("code", { registers: { bc: 0x1234 } });
+
+    expect(failure).toThrow(/#4000 +code +NOP\n/);
+    expect(failure).toThrow(/BC #1234/);
+  });
+});
+
+const JR_N = 0x18;
+const INC_A = 0x3c;
+const HALT = 0x76;
+
+describe("a Run exceeding its NOP limit", () => {
+  it("fails at the default limit of 1,000,000 NOPs, saying so", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [JR_N, 0xfe] }],
+      symbols: { forever: 0x4000 },
+    });
+
+    expect(() => program.run("forever")).toThrow(/NOP limit of 1,000,000 NOPs/);
+  });
+
+  it("fails at the limit the test sets, and passes when it lasts exactly that", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [NOP, LD_A_N, 5, RET] }],
+      symbols: { set_a: 0x4000 },
+    });
+
+    expect(program.run("set_a", { nopLimit: 6 }).nops).toBe(6);
+    expect(() => program.run("set_a", { nopLimit: 5 })).toThrow(
+      /NOP limit of 5 NOPs/,
+    );
+  });
+
+  it("refuses a limit that is not a whole number of NOPs, which would never stop it", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET] }],
+      symbols: { nothing: 0x4000 },
+    });
+
+    for (const nopLimit of [Number.NaN, -1, 2.5]) {
+      expect(() => program.run("nothing", { nopLimit })).toThrow(/NOP limit/);
+    }
+  });
+});
+
+describe("a Run stuck on HALT", () => {
+  // Each step on HALT, then halted, is one M1 cycle: R goes up by one per NOP.
+  it("counts the HALT, then 1 NOP per step halted, until the limit", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [HALT, 0xcb] }],
+      symbols: { wait: 0x4000 },
+    });
+
+    const failure = () => program.run("wait", { nopLimit: 100 });
+
+    expect(failure).toThrow(/NOP limit of 100 NOPs/);
+    expect(failure).toThrow(/R #64/);
+    expect(failure).toThrow(/#4000 +wait +HALT\n\n/);
+  });
+
+  // A million steps, the slowest a Run can take to reach the default limit.
+  it("fails at the default limit in well under a second", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [HALT] }],
+      symbols: { wait: 0x4000 },
+    });
+
+    const start = performance.now();
+    expect(() => program.run("wait")).toThrow(/NOP limit/);
+
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+});
+
+describe("the failure report of a Run", () => {
+  it("shows each instruction executed, disassembled, with its address and the nearest label at or below it", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [LD_A_N, 5, INC_A, JR_N, 0xfd] }],
+      symbols: { start: 0x4000, loop: 0x4002, data: 0x6000 },
+    });
+
+    const failure = () => program.run("start", { nopLimit: 10 });
+
+    expect(failure).toThrow(/#4000 +start +LD A,#05\n/);
+    expect(failure).toThrow(/#4002 +loop +INC A\n/);
+    expect(failure).toThrow(/#4003 +loop\+1 +JR #4002\n/);
+  });
+
+  it("shows the first label of the symbol table when several share an address, and none below the lowest", async () => {
+    const program = await load({
+      blocks: [
+        { address: 0x3000, bytes: [JP_NN, 0x00, 0x40] },
+        { address: 0x4000, bytes: [JR_N, 0xfe] },
+      ],
+      symbols: { main: 0x4000, alias: 0x4000, entry: 0x3000 },
+    });
+
+    const failure = () => program.run("entry", { nopLimit: 6 });
+
+    expect(failure).toThrow(/#3000 +entry +JP #4000\n/);
+    expect(failure).toThrow(/#4000 +main +JR #4000\n/);
+  });
+
+  it("shows no label for an instruction below every label", async () => {
+    const program = await load({
+      blocks: [
+        { address: 0x3000, bytes: [JR_N, 0xfe] },
+        { address: 0x4000, bytes: [JP_NN, 0x00, 0x30] },
+      ],
+      symbols: { jump_down: 0x4000 },
+    });
+
+    const failure = () => program.run("jump_down", { nopLimit: 6 });
+
+    expect(failure).toThrow(/^ {2}#3000 +JR #3000$/m);
+  });
+
+  it("shows only the last 16 instructions executed", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: new Array(25).fill(NOP) }],
+      symbols: { nops: 0x4000 },
+    });
+
+    const failure = () => program.run("nops", { nopLimit: 20 });
+
+    expect(failure).toThrow(/^ +#4004 /m);
+    expect(failure).toThrow(/^ +#4013 /m);
+    expect(failure).not.toThrow(/^ +#4003 /m);
+    expect(failure).not.toThrow(/^ +#4014 /m);
+  });
+
+  it("shows the final registers", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [JR_N, 0xfe] }],
+      symbols: { forever: 0x4000 },
+    });
+
+    const failure = () =>
+      program.run("forever", {
+        nopLimit: 30,
+        registers: { a: 0x5a, bc: 0x1234, hlPrime: 0xabcd, iy: 0x0042 },
+      });
+
+    expect(failure).toThrow(/AF #5A00/);
+    expect(failure).toThrow(/BC #1234/);
+    expect(failure).toThrow(/HL' #ABCD/);
+    expect(failure).toThrow(/IY #0042/);
+    expect(failure).toThrow(/SP #BFFE/);
+    expect(failure).toThrow(/PC #4000/);
+  });
 });

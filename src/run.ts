@@ -1,12 +1,18 @@
 import {
   BYTE_REGISTERS,
   createCpu,
+  disassemble,
   type Registers,
   WORD_REGISTERS,
 } from "./cpu/index.ts";
 import { CALL_NOPS, nopsOf } from "./nops.ts";
 
 const DEFAULT_SP = 0xc000;
+const DEFAULT_NOP_LIMIT = 1_000_000;
+// How many of the last instructions executed a failure report shows.
+const HISTORY_LENGTH = 16;
+// The most bytes a Z80 instruction spans.
+const LONGEST_INSTRUCTION = 4;
 // The return address pushed for the Routine. The Routine has returned when PC is back here
 // with the stack back where it was, so a jump to this address alone does not end the Run.
 const SENTINEL = 0xffff;
@@ -41,6 +47,8 @@ export interface RunOptions {
   readonly registers?: StartRegisters;
   /** Applied after `registers`, so they override the matching bits of F. */
   readonly flags?: Partial<Flags>;
+  /** The longest the Run may last, in NOPs; 1,000,000 by default. */
+  readonly nopLimit?: number;
 }
 
 export interface Run {
@@ -52,20 +60,28 @@ export interface Run {
   readonly nopsWithCall: number;
 }
 
-/** The 64 KB of memory a Program was loaded into. */
-export interface LoadedMemory {
+/** What a Run needs from a Program: the 64 KB it was loaded into, and its labels. */
+export interface LoadedProgram {
   readonly bytes: Uint8Array;
   /** Whether the Program put a byte at `address`. */
   occupies(address: number): boolean;
+  /** The label at or nearest below `address`, as `label` or `label+offset`; empty if none. */
+  labelNear(address: number): string;
 }
 
 /** Runs the Routine at `entry` on a fresh copy of `loaded` until it returns. */
 export function run(
-  loaded: LoadedMemory,
+  loaded: LoadedProgram,
   entry: number,
   options: RunOptions = {},
 ): Run {
   checkWidths(options.registers ?? {});
+  const nopLimit = options.nopLimit ?? DEFAULT_NOP_LIMIT;
+  if (!(Number.isInteger(nopLimit) && nopLimit >= 0)) {
+    throw new Error(
+      `The NOP limit cannot be ${nopLimit}: it takes a whole number of NOPs, 0 or more`,
+    );
+  }
   const cpu = createCpu();
   const memory = cpu.memory;
   memory.set(loaded.bytes);
@@ -86,13 +102,34 @@ export function run(
   cpu.setRegisters({ ...options.registers, sp, pc: entry });
   cpu.setRegisters({ f: withFlags(cpu.registers().f, options.flags ?? {}) });
 
+  const history = new History();
+  const failure = (reason: string, registers: Registers) =>
+    new Error(report(reason, history.lines(loaded), registers));
   let nops = 0;
   for (
     let before = cpu.registers();
     !hasReturned(before, callerSp);
     before = cpu.registers()
   ) {
-    nops += nopsOf(memory, before);
+    const halted = cpu.internals().halted;
+    const cost = nopsOf(memory, before, halted);
+    if (cost === undefined) {
+      throw failure(
+        `No NOP count for the instruction ${hex(memory[before.pc] ?? 0, 2)} at ${hex(before.pc)}: prefixed instructions are not counted yet`,
+        before,
+      );
+    }
+    if (nops + cost > nopLimit) {
+      throw failure(
+        `The Run reached its NOP limit of ${nopLimit.toLocaleString("en-US")} NOPs`,
+        before,
+      );
+    }
+    nops += cost;
+    // Halted, PC is already past the HALT, and the CPU executes no instruction of the Routine.
+    if (!halted) {
+      history.record(memory, before.pc);
+    }
     cpu.step();
   }
 
@@ -103,6 +140,83 @@ export function run(
     nops,
     nopsWithCall: nops + CALL_NOPS,
   });
+}
+
+const REPORTED_REGISTERS: readonly (readonly [string, keyof Registers])[][] = [
+  [
+    ["AF", "af"],
+    ["BC", "bc"],
+    ["DE", "de"],
+    ["HL", "hl"],
+  ],
+  [
+    ["AF'", "afPrime"],
+    ["BC'", "bcPrime"],
+    ["DE'", "dePrime"],
+    ["HL'", "hlPrime"],
+  ],
+  [
+    ["IX", "ix"],
+    ["IY", "iy"],
+    ["SP", "sp"],
+    ["PC", "pc"],
+  ],
+];
+
+/** The last instructions executed, with the bytes they had when they ran. */
+class History {
+  private readonly entries: { address: number; bytes: number[] }[] = [];
+  private next = 0;
+
+  record(memory: Uint8Array, address: number): void {
+    const bytes = Array.from(
+      { length: LONGEST_INSTRUCTION },
+      (_, i) => memory[(address + i) & 0xffff] ?? 0,
+    );
+    this.entries[this.next] = { address, bytes };
+    this.next = (this.next + 1) % HISTORY_LENGTH;
+  }
+
+  /** One line per instruction, oldest first: address, nearest label, mnemonic. */
+  lines(loaded: LoadedProgram): string[] {
+    const oldestFirst = [
+      ...this.entries.slice(this.next),
+      ...this.entries.slice(0, this.next),
+    ];
+    const rows = oldestFirst.map(({ address, bytes }) => ({
+      address,
+      label: loaded.labelNear(address),
+      text: disassemble(address, bytes).text,
+    }));
+    const width = Math.max(0, ...rows.map(({ label }) => label.length));
+    return rows.map(
+      ({ address, label, text }) =>
+        `  ${hex(address)}  ${label.padEnd(width)}  ${text}`,
+    );
+  }
+}
+
+/** The message of a failed Run: why it failed, where it went, and the state it left. */
+function report(
+  reason: string,
+  history: readonly string[],
+  registers: Registers,
+): string {
+  const lines = REPORTED_REGISTERS.map(
+    (row) =>
+      `  ${row.map(([label, name]) => `${label} ${hex(registers[name])}`).join("  ")}`,
+  );
+  const iAndR = `  I ${hex(registers.i, 2)}  R ${hex(registers.r, 2)}`;
+  return [
+    reason,
+    "",
+    `Last ${history.length} instructions executed:`,
+    ...history,
+    "",
+    "Registers:",
+    ...lines,
+    iAndR,
+  ].join("\n");
 }
 
 function checkWidths(registers: StartRegisters): void {
@@ -149,6 +263,6 @@ function flagsOf(f: number): Flags {
   return Object.fromEntries(entries) as Flags;
 }
 
-function hex(address: number): string {
-  return `#${address.toString(16).toUpperCase().padStart(4, "0")}`;
+function hex(value: number, digits = 4): string {
+  return `#${value.toString(16).toUpperCase().padStart(digits, "0")}`;
 }

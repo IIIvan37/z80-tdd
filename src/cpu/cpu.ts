@@ -57,6 +57,14 @@ export interface Ports {
   write(address: number, value: number): void;
 }
 
+/** One instruction, disassembled. */
+export interface Instruction {
+  /** The mnemonic, numbers in hexadecimal as CPC assemblers write them, such as `LD A,#05`. */
+  readonly text: string;
+  /** How many bytes the instruction spans, 1 to 4. */
+  readonly length: number;
+}
+
 export interface Cpu {
   /** The 64 KB the CPU executes from and into; writing to it changes what the CPU sees. */
   readonly memory: Uint8Array;

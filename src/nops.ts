@@ -13,6 +13,8 @@ interface Conditional {
 }
 
 export const CALL_NOPS = 5;
+// Each step a halted CPU takes: the NOP it executes internally until an interrupt.
+const HALTED_NOPS = 1;
 
 const UNPREFIXED_NOPS: (number | Conditional)[] = new Array(256);
 
@@ -63,7 +65,7 @@ setNops(3, ...inPairField(0x09)); // add hl,rr
 setNops(2, ...inPairField(0x03), ...inPairField(0x0b)); // inc rr  dec rr
 
 // General-purpose arithmetic and CPU control
-// halt: the HALT itself; the steps the CPU then stays halted are not counted yet (ticket 06).
+// halt: the HALT itself; each step the CPU then stays halted is HALTED_NOPS.
 setNops(1, 0x27, 0x2f, 0x3f, 0x37, 0x00, 0x76, 0xf3, 0xfb); // daa cpl ccf scf nop halt di ei
 
 // Rotate
@@ -106,21 +108,21 @@ setNops({ met: 4, notMet: 3, isMet: ({ b }) => b !== 1 }, 0x10); // djnz n: not 
 // Input and output
 setNops(3, 0xdb, 0xd3); // in a,(n)  out (n),a
 
-/** The CPC duration, in NOPs, of the instruction at PC, executed from the state `before`. */
-export function nopsOf(memory: Uint8Array, before: Registers): number {
-  const opcode = memory[before.pc] ?? 0;
-  const entry = UNPREFIXED_NOPS[opcode];
-  if (entry === undefined) {
-    throw new Error(
-      `No NOP count for the instruction ${hex(opcode, 2)} at ${hex(before.pc, 4)}: prefixed instructions are not counted yet`,
-    );
+/**
+ * The CPC duration, in NOPs, of the next step from the state `before`: the instruction at PC,
+ * or, if the CPU is `halted`, the NOP it executes internally. Undefined if the table has no count.
+ */
+export function nopsOf(
+  memory: Uint8Array,
+  before: Registers,
+  halted: boolean,
+): number | undefined {
+  if (halted) {
+    return HALTED_NOPS;
   }
-  if (typeof entry === "number") {
+  const entry = UNPREFIXED_NOPS[memory[before.pc] ?? 0];
+  if (entry === undefined || typeof entry === "number") {
     return entry;
   }
   return entry.isMet(before) ? entry.met : entry.notMet;
-}
-
-function hex(value: number, digits: number): string {
-  return `#${value.toString(16).toUpperCase().padStart(digits, "0")}`;
 }

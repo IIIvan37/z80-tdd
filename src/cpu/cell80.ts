@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import {
   BYTE_REGISTERS,
   type Cpu,
+  type Instruction,
   type Internals,
   type Ports,
   type Registers,
@@ -37,6 +38,8 @@ interface Exports {
   read_state(): void;
   write_state(): void;
   step(): void;
+  text_ptr(): number;
+  disassemble(pc: number, bytes: number): number;
 }
 
 // The layout of STATE in wasm/src/lib.rs: the 16-bit registers in WORD_REGISTERS
@@ -54,6 +57,11 @@ const SLOT_OF = {
 } as const;
 
 type WordRegister = (typeof WORD_REGISTERS)[number];
+/** The first slots of STATE, one per entry of WORD_REGISTERS. */
+type WordSlots = NumberPer<typeof WORD_REGISTERS>;
+type NumberPer<T extends readonly unknown[]> = {
+  readonly [slot in keyof T]: number;
+};
 type ByteRegister = (typeof BYTE_REGISTERS)[number];
 
 const high = (pair: WordRegister) => [WORD_REGISTERS.indexOf(pair), 8] as const;
@@ -79,15 +87,47 @@ const BYTE_SLOTS: Readonly<Record<ByteRegister, readonly [number, number]>> = {
 
 const NO_PORTS: Ports = { read: () => 0xff, write: () => {} };
 
-/** A Cpu backed by the cell80-z80 core compiled to WebAssembly, with its own 64 KB of memory. */
-export function createCpu(ports: Ports = NO_PORTS): Cpu {
+function instantiate(ports: Ports): Exports {
   const instance = new WebAssembly.Instance(CELL80, {
     env: {
       io_in: (port: number) => ports.read(port) & 0xff,
       io_out: (port: number, value: number) => ports.write(port, value),
     },
   });
-  const wasm = instance.exports as unknown as Exports;
+  return instance.exports as unknown as Exports;
+}
+
+// Disassembling allocates, which can grow the WebAssembly memory and detach every view
+// on it; so it runs in an instance of its own, and a Cpu's views stay valid.
+let disassembler: Exports | undefined;
+
+/** Disassembles the instruction made of `bytes` (only the ones it spans are read) at `address`. */
+export function disassemble(
+  address: number,
+  bytes: readonly number[],
+): Instruction {
+  disassembler ??= instantiate(NO_PORTS);
+  const firstFourBytes = [0, 1, 2, 3].reduce(
+    (word, i) => word + (bytes[i] ?? 0) * 2 ** (8 * i),
+    0,
+  );
+  // The instruction's length in the high byte, the text's length in the low byte.
+  const lengths = disassembler.disassemble(address, firstFourBytes);
+  const text = new Uint8Array(
+    disassembler.memory.buffer,
+    disassembler.text_ptr(),
+    lengths & 0xff,
+  );
+  return {
+    // cell80 writes `$` before a hexadecimal number; CPC assemblers write `#`.
+    text: new TextDecoder().decode(text).replaceAll("$", "#"),
+    length: lengths >> 8,
+  };
+}
+
+/** A Cpu backed by the cell80-z80 core compiled to WebAssembly, with its own 64 KB of memory. */
+export function createCpu(ports: Ports = NO_PORTS): Cpu {
+  const wasm = instantiate(ports);
   const memory = new Uint8Array(wasm.memory.buffer, wasm.memory_ptr(), 0x10000);
   const state = new Uint16Array(
     wasm.memory.buffer,
@@ -102,14 +142,51 @@ export function createCpu(ports: Ports = NO_PORTS): Cpu {
 
   return {
     memory,
-    registers: () => {
-      const slots = refreshState();
-      const words = WORD_REGISTERS.map((name, slot) => [name, slots[slot]]);
-      const bytes = BYTE_REGISTERS.map((name) => {
-        const [slot, shift] = BYTE_SLOTS[name];
-        return [name, ((slots[slot] ?? 0) >> shift) & 0xff];
-      });
-      return Object.fromEntries([...words, ...bytes]) as Registers;
+    // Spelled out rather than built from WORD_REGISTERS and BYTE_SLOTS: the Run reads the
+    // registers before every step, and building the object from entries is 50 times slower.
+    registers: (): Registers => {
+      const [
+        af,
+        bc,
+        de,
+        hl,
+        afPrime,
+        bcPrime,
+        dePrime,
+        hlPrime,
+        ix,
+        iy,
+        sp,
+        pc,
+      ] = refreshState() as unknown as WordSlots;
+      return {
+        af,
+        bc,
+        de,
+        hl,
+        afPrime,
+        bcPrime,
+        dePrime,
+        hlPrime,
+        ix,
+        iy,
+        sp,
+        pc,
+        a: af >> 8,
+        f: af & 0xff,
+        b: bc >> 8,
+        c: bc & 0xff,
+        d: de >> 8,
+        e: de & 0xff,
+        h: hl >> 8,
+        l: hl & 0xff,
+        ixh: ix >> 8,
+        ixl: ix & 0xff,
+        iyh: iy >> 8,
+        iyl: iy & 0xff,
+        i: state[SLOT_OF.i] ?? 0,
+        r: state[SLOT_OF.r] ?? 0,
+      };
     },
     setRegisters: (values) => {
       const slots = refreshState();
