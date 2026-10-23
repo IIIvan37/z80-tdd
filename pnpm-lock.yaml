@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      z80-emulator:
-        specifier: 2.3.0
-        version: 2.3.0
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.6.2
@@ -658,14 +654,6 @@ packages:
     engines: {node: '>=20.11'}
     hasBin: true
 
-  z80-base@2.0.1:
-    resolution: {integrity: sha512-Zflx/2fATJ1cMXiiqBFbOadHvC12Yg12CHCiEGGaOnkA18SxRVCiBDpNRuYm7MGGHdBlDTwdlDS8Ga4OC0G88A==}
-    deprecated: No longer published to npm; see https://github.com/lkesteloot/trs80
-
-  z80-emulator@2.3.0:
-    resolution: {integrity: sha512-+tFFzTuarvgORru5N9LC6RREOkayrsX4ADHxi+mPXPSQGXJzDzde3j5g+zp88LucLOI4ZQCj5VqPF/YjqW9GNw==}
-    deprecated: No longer published to npm; see https://github.com/lkesteloot/trs80
-
 snapshots:
 
   '@biomejs/biome@2.6.2':
@@ -1103,9 +1091,3 @@ snapshots:
   watskeburt@6.0.0: {}
 
   why-is-node-running@3.2.1: {}
-
-  z80-base@2.0.1: {}
-
-  z80-emulator@2.3.0:
-    dependencies:
-      z80-base: 2.0.1

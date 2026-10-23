@@ -19,17 +19,16 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-wasm.ts",
+    "build:wasm": "node scripts/build-wasm.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:core": "node --use-env-proxy scripts/fetch-single-step-tests.ts && vitest run --config vitest.core.config.ts",
     "check": "biome check .",
     "check:fix": "biome check . --write",
     "depcruise": "depcruise src",
     "gate": "pnpm typecheck && pnpm check && pnpm depcruise && pnpm test"
-  },
-  "dependencies": {
-    "z80-emulator": "2.3.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",

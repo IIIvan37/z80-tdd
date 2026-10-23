@@ -61,8 +61,9 @@ export function run(
   options: RunOptions = {},
 ): Run {
   checkWidths(options.registers ?? {});
-  const memory = loaded.bytes.slice();
-  const cpu = createCpu(memory);
+  const cpu = createCpu();
+  const memory = cpu.memory;
+  memory.set(loaded.bytes);
 
   const callerSp = options.registers?.sp ?? DEFAULT_SP;
   const sp = (callerSp - 2) & 0xffff;

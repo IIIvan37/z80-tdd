@@ -105,7 +105,7 @@ An npm package, `z80-tdd`, installed as a dev dependency of a CPC project. I wri
 ## Implementation Decisions
 
 - **Language and runtime.** TypeScript in strict mode, tests with Vitest, pnpm, Biome for lint and format. One npm package, `z80-tdd`. See ADR 0001.
-- **Z80 core.** Reuse the pure-JavaScript `z80-emulator` package behind a CPU interface. Its adapter must pass SingleStepTests/z80 before the rest of the tool relies on it. If it fails, replace the core or write one, without touching other modules.
+- **Z80 core.** Reuse the pure-JavaScript `z80-emulator` package behind a CPU interface. Its adapter must pass SingleStepTests/z80 before the rest of the tool relies on it. If it fails, replace the core or write one, without touching other modules. *Amended during ticket 02: the core is now cell80-z80 compiled to WebAssembly, see ADR 0004.*
 - **NOP counting.** The tool looks up each executed instruction in its own CPC NOP table, derived from Madram's tables, with separate values for conditions met and not met, and per-iteration values for repeated block instructions. It never converts T-states from the core. See ADR 0002. Credit Madram / Overlanders in the package, as the source asks.
 - **Assembler interface.** It takes a source file (and include paths) and returns either the assembled bytes with their load addresses and the symbol table, or the assembler's errors with file and line. RASM is the first adapter: it runs the `rasm` binary found on the PATH or at the configured path, and reads RASM's symbol export.
 - **Program.** It holds the assembled bytes and the symbol table. It resolves labels to addresses and label-plus-length to ranges. It is built once per test file and is the only way to start a Run.

@@ -16,3 +16,26 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm gate
+
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install the Rust toolchain pinned in wasm/rust-toolchain.toml
+        working-directory: wasm
+        run: rustup toolchain install
+      - run: pnpm build:wasm
+      - name: The committed cell80.wasm matches its source
+        run: git diff --exit-code src/cpu/cell80.wasm
+      # The fetch script pins the suite's commit, so its hash keys the cache.
+      - uses: actions/cache@v4
+        with:
+          path: .cache/single-step-tests
+          key: single-step-tests-${{ hashFiles('scripts/fetch-single-step-tests.ts') }}
+      - run: pnpm test:core
