@@ -227,6 +227,16 @@ describe("the Stubs of a Run", () => {
     );
   });
 
+  it("refuses a name that is not a register among the Stub's, naming the Stub", async () => {
+    const program = await loadPlaySound();
+
+    expect(() =>
+      program.run("play_sound", {
+        stubs: [{ at: 0xbb5a, registers: { foo: 1 } as never }],
+      }),
+    ).toThrow('"foo" is not a register of the Stub at #BB5A: the registers are');
+  });
+
   it("refuses SP or PC set by a Stub, which its return sets", async () => {
     const program = await loadPlaySound();
 

@@ -630,6 +630,15 @@ function checkRegisters(
 ): void {
   const subject = (name: string) =>
     setter === undefined ? `Register ${name}` : `Register ${name} ${setter}`;
+  const names: readonly string[] = [...BYTE_REGISTERS, ...WORD_REGISTERS];
+  for (const name of Object.keys(registers)) {
+    if (!names.includes(name)) {
+      const of = setter === undefined ? "" : ` ${setter}`;
+      throw new Error(
+        `"${name}" is not a register${of}: the registers are ${names.join(", ")}`,
+      );
+    }
+  }
   for (const name of unsettable) {
     if (name in registers) {
       throw new Error(`${subject(name)} cannot be set: ${why}`);

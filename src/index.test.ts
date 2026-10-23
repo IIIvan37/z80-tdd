@@ -288,6 +288,17 @@ describe("a Run", () => {
     );
   });
 
+  it("fails on a name that is not a register, rather than ignore it", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET] }],
+      symbols: { nothing: 0x4000 },
+    });
+
+    expect(() =>
+      program.run("nothing", { registers: { HL: 0x1234 } as never }),
+    ).toThrow('"HL" is not a register: the registers are a, f, b, c,');
+  });
+
   it("refuses a PC set by the test, since the Run starts at the entry label", async () => {
     const program = await load({
       blocks: [{ address: 0x4000, bytes: [RET] }],
