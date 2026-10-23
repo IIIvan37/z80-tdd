@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { loadProgram, memoryMatchers, type Program } from "z80-tdd";
+import { loadProgram, type Program, runMatchers } from "z80-tdd";
 
-expect.extend(memoryMatchers);
+expect.extend(runMatchers);
 
 const GATE_ARRAY = 0x7f10;
 const SET_COLOUR = 0x40;
