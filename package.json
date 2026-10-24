@@ -1,6 +1,6 @@
 {
   "name": "z80-tdd",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Test Z80 routines of Amstrad CPC projects, test-first",
   "license": "MIT",
