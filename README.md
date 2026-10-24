@@ -196,7 +196,7 @@ Registers:
 
 ## The example project
 
-[example/](example/) is a CPC project with its own `z80-tdd.config.ts`. Its tests assemble the Program with the real RASM and run on z80-tdd as built for npm.
+[example/](example/) is a CPC project with its own `z80-tdd.config.ts`. Its tests assemble the Program with the real RASM and run on z80-tdd as built for its release tarball, from `dist/`.
 
 | Routine | What its test checks |
 |---|---|
@@ -213,9 +213,9 @@ A NOP is the CPC unit of time: one microsecond. The CPC stretches each memory ac
 
 ## Limits
 
-- The Run loads the Program in 64 KB of RAM: no ROM, no firmware, no memory banking, no video. Replace a firmware call with a Stub.
-- The Run executes no interrupt. A Routine that waits for one, such as a `HALT` with interrupts enabled, reaches its NOP limit.
-- `portWrites` holds the raw port address and value. z80-tdd does not decode them into CRTC registers or Gate Array commands.
+- `loadProgram()` loads the Program in 64 KB of RAM: no ROM, no firmware, no memory banking, no video. Replace a firmware call with a Stub.
+- The Run executes no interrupt. A Routine that waits for one, such as a `HALT`, reaches its NOP limit.
+- Port writes stay raw, as a port address and a value. z80-tdd does not decode them into CRTC registers or Gate Array commands.
 - RASM is the only Assembler. A test file is TypeScript run by Vitest: there is no standalone runner and no code coverage of Routines.
 
 ## Developing z80-tdd
