@@ -2,7 +2,7 @@
 
 Write the Z80 assembly of an Amstrad CPC project test-first. Each Vitest test runs a Routine of your real project on an emulated Z80, then checks the registers, flags, memory and duration in NOPs it leaves behind.
 
-> **Status:** v1 in progress, not on npm yet. Registers, flags, memory, NOP counts, the NOP limit, ports, Stubs, RASM and the configuration file work. [example/](example/) is a small CPC project tested with each of them.
+> **Status:** 0.1.0, the first release, published as a GitHub release, not on npm. Registers, flags, memory, NOP counts, the NOP limit, ports, Stubs, RASM and the configuration file work. [example/](example/) is a small CPC project tested with each of them. See [Limits](#limits) for what z80-tdd does not do yet.
 
 ## What a test looks like
 
@@ -39,7 +39,7 @@ buffer:
 
 ```ts
 import { beforeAll, describe, expect, it } from "vitest";
-import { loadProgram, runMatchers, type Program } from "z80-tdd";
+import { loadProgram, type Program, runMatchers } from "z80-tdd";
 
 expect.extend(runMatchers);
 
@@ -68,10 +68,10 @@ describe("clear_buffer", () => {
 
 z80-tdd needs Node.js 24 or later and Vitest.
 
-1. Add z80-tdd and Vitest to the CPC project, as dev dependencies, once z80-tdd is published:
+1. Add z80-tdd and Vitest to the CPC project, as dev dependencies. z80-tdd comes from the tarball of [its GitHub release](https://github.com/IIIvan37/z80-tdd/releases/tag/v0.1.0):
 
    ```sh
-   pnpm add -D z80-tdd vitest
+   pnpm add -D https://github.com/IIIvan37/z80-tdd/releases/download/v0.1.0/z80-tdd-0.1.0.tgz vitest
    ```
 
 2. Install RASM, the Assembler z80-tdd supports. Download it from [the RASM releases](https://github.com/EdouardBERGE/rasm/releases), then put `rasm` on the PATH. z80-tdd is tested with RASM v3.3.1.
@@ -196,7 +196,7 @@ Registers:
 
 ## The example project
 
-[example/](example/) is a CPC project with its own `z80-tdd.config.ts`. Its tests assemble the Program with the real RASM and run on z80-tdd as built for npm.
+[example/](example/) is a CPC project with its own `z80-tdd.config.ts`. Its tests assemble the Program with the real RASM and run on z80-tdd as built for its release tarball, from `dist/`.
 
 | Routine | What its test checks |
 |---|---|
@@ -211,12 +211,19 @@ Registers:
 
 A NOP is the CPC unit of time: one microsecond. The CPC stretches each memory access to a multiple of 4 T-states, so a NOP count is not a T-state count divided by 4. z80-tdd counts every instruction with Madram's table measured on a real CPC ([ADR 0002](docs/adr/0002-nops-counted-from-our-own-cpc-table.md)). A conditional instruction counts its taken or not-taken duration, as the Run goes.
 
+## Limits
+
+- `loadProgram()` loads the Program in 64 KB of RAM: no ROM, no firmware, no memory banking, no video. Replace a firmware call with a Stub.
+- The Run executes no interrupt. A Routine that waits for one, such as a `HALT`, reaches its NOP limit.
+- Port writes stay raw, as a port address and a value. z80-tdd does not decode them into CRTC registers or Gate Array commands.
+- RASM is the only Assembler. A test file is TypeScript run by Vitest: there is no standalone runner and no code coverage of Routines.
+
 ## Developing z80-tdd
 
 ```sh
 pnpm install
 pnpm gate        # typecheck, Biome, dependency-cruiser, Vitest, then build and test example/
-pnpm test:core   # the Z80 core against SingleStepTests, 1.6 million cases
+pnpm test:core   # downloads SingleStepTests, then checks the Z80 core against its 1.6 million cases
 pnpm build:wasm  # rebuilds src/cpu/cell80.wasm; needs the Rust toolchain of wasm/rust-toolchain.toml
 ```
 
