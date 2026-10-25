@@ -11,23 +11,25 @@ Le dépôt GitHub est public depuis le 2026-10-23. Il a été recréé avec un h
 appartenaient à l'ancien dépôt, supprimé. Le README pour la 0.1.0 est la PR #1 du nouveau dépôt.
 La durée d'un pas reste lue dans la table de Madram (ADR 0002) : la mesure sur cell80 est dans le rapport du 2026-10-24.
 Gate local vert : 2 015 tests, plus 6 dans l'exemple. La CI GitHub ne tourne qu'au merge dans `main`, hors Markdown seul.
+Le dépôt public `IIIvan37/z80-tdd-sorts` emploie z80-tdd 0.1.0 par son tarball. Il porte sept articles livrés, de `intro` à `strcmp`.
 Modules : [docs/MODULES.md](MODULES.md), règles : [CODING_STANDARDS.md](../CODING_STANDARDS.md),
 spec : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md).
 
 ## Prochaine action
 
-Cadrer le dépôt des tris (premier tri, nommage des branches et des tags par étape du TDD) avant son premier commit.
+Aucune dans ce dépôt : le travail continue dans `z80-tdd-sorts`, dont le STATUS donne la prochaine action.
 
 ## Questions ouvertes
 
 - Ajouter un test qui compare `nops.ts` au modèle d'alignement des `tick()` de cell80 (3 524 accords sur 3 560, 36 exceptions connues) ?
-- Publier sur npm, et quand ? Prématuré pour la 0.1.0.
+- Publier sur npm, et quand ? La publication annule l'ADR 0009.
+  pnpm 10 écrit le lockfile sans integrity quand son store contient déjà le tarball (vu dans `z80-tdd-sorts`, corrigé par pnpm 11.9).
 
 ## Tickets
 
 - Livrés : les onze tickets de la v1, la revue de jalon v1 et l'architecture de `run.ts` (PR de l'ancien dépôt).
 - Démarrables : aucun ; les onze tickets de la v1 sont `done`.
-- Prochain : aucun ticket dans ce dépôt ; le travail suivant est le dépôt des tris.
+- Prochain : aucun ticket dans ce dépôt.
 
 ## Historique
 
