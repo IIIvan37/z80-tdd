@@ -41,3 +41,4 @@ Aucune dans ce dépôt : le travail continue dans `z80-tdd-sorts`, dont le STATU
 - 2026-10-23 · **revue de jalon v1** : code-review et security-review, configuration cherchée vers le haut (ADR 0008), `toHaveRegisters`.
 - 2026-10-23 · **architecture de run.ts** : vocabulaire Z80 dans le module CPU, classe `Stubs`, complexité de `run()` sous 15.
 - 2026-10-24 · **release 0.1.0** : mesure des T-states, dépôt public à l'historique réécrit, tarball de release (ADR 0009).
+- 2026-10-25 · **status-sorts-repo** : STATUS pointé vers `z80-tdd-sorts`, question npm complétée (PR #3).
