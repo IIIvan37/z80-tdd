@@ -47,6 +47,17 @@ describe("the RASM Assembler, with the real rasm", () => {
     });
   });
 
+  it("reads a -map listing longer than 1 MB", async () => {
+    const assembly = await rasmAssembler().assemble(
+      "long-listing.asm",
+      FIXTURES,
+    );
+
+    expect(assembly.blocks).toEqual([
+      { address: 0x1000, bytes: new Array(6000).fill(0) },
+    ]);
+  });
+
   it("gives the symbols defined by EQU along with the labels", async () => {
     const assembly = await rasmAssembler().assemble("equ.asm", FIXTURES);
 
