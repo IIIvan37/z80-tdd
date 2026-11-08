@@ -18,6 +18,9 @@ const SYMBOL_LINE =
 const ERROR_LINE = /^\[(.+):(\d+)\] (.*)$/gm;
 const DOWNLOAD = "https://github.com/EdouardBERGE/rasm/releases";
 const ARGS = ["program.asm", "-map", "-s", "-sq", "-os", "symbols.txt"];
+// The -map listing of a whole CPC program can pass the 1 MB that execFile
+// keeps by default: about 200 bytes per line, one line per byte in a REPEAT.
+const LISTING_MAX_BYTES = 64 * 1024 * 1024;
 
 /** What `execFile` rejects with. */
 interface RasmError {
@@ -49,6 +52,7 @@ export function rasmAssembler({ path = "rasm" }: RasmOptions = {}): Assembler {
         );
         const { stdout } = await execFileAsync(command, ARGS, {
           cwd: dir,
+          maxBuffer: LISTING_MAX_BYTES,
         }).catch((error: RasmError) => {
           throw failureOf(error, path, source);
         });
