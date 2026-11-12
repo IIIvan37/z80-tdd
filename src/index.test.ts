@@ -56,6 +56,35 @@ describe("a Program", () => {
 
     expect(program.address("buffer")).toBe(0x5000);
   });
+
+  it("fails to give the address of a name that matches labels of different cases, naming them", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET, RET] }],
+      symbols: { Loop: 0x4000, loop: 0x4001 },
+    });
+
+    expect(() => program.address("LOOP")).toThrow(
+      'The name "LOOP" matches several labels of the Program, whatever their case: Loop, loop',
+    );
+  });
+
+  it("fails to run a name that matches labels of different cases, naming them", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET, RET] }],
+      symbols: { Loop: 0x4000, loop: 0x4001 },
+    });
+
+    expect(() => program.run("loop")).toThrow(/"loop".*Loop, loop/);
+  });
+
+  it("gives the address of a label beside labels of different cases", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET, RET] }],
+      symbols: { Loop: 0x4000, loop: 0x4001, buffer: 0x5000 },
+    });
+
+    expect(program.address("BUFFER")).toBe(0x5000);
+  });
 });
 
 describe("a Run", () => {

@@ -4,5 +4,5 @@ A Program finds a label whatever its case: `program.run("double")` runs the labe
 
 ## Consequences
 
-- The rule holds for every Assembler. An assembler that tells `Loop` from `LOOP` would make two such labels collide; the rule is to revisit when one is supported.
+- The rule holds for every Assembler, including FantAMS, which tells `Loop` from `loop`. A name that matches several labels whatever their case fails and names them all: the test writes another name, never runs one of them by chance. Such labels do not stop the Program from loading; only the ambiguous name fails.
 - A failure report shows labels as the Assembler gives them: in capitals with RASM.
