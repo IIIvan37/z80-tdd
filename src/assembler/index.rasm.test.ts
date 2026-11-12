@@ -108,6 +108,12 @@ describe("the RASM Assembler, with the real rasm", () => {
     ).rejects.toThrow('The source file "nowhere/main.asm" does not exist');
   });
 
+  it("fails on a source that names a folder, naming it", async () => {
+    await expect(
+      rasmAssembler().assemble("included", FIXTURES),
+    ).rejects.toThrow('The source file "included" does not exist');
+  });
+
   it("fails with RASM's message, file and line", async () => {
     await expect(
       rasmAssembler().assemble("error.asm", FIXTURES),

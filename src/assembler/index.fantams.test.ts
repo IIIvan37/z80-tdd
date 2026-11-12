@@ -138,6 +138,12 @@ describe("the FantAMS Assembler, with the real fantams", () => {
     ).rejects.toThrow('The source file "nowhere/main.asm" does not exist');
   });
 
+  it("fails on a source that names a folder, naming it", async () => {
+    await expect(
+      fantamsAssembler().assemble("program", FIXTURES),
+    ).rejects.toThrow('The source file "program" does not exist');
+  });
+
   it("fails on a .fo object of a version it does not read, naming it", async () => {
     const dir = await mkdtemp(join(tmpdir(), "z80-tdd-fake-fantams-"));
     try {
