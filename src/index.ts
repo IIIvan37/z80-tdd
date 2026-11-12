@@ -2,6 +2,8 @@ export {
   type Assembler,
   type Assembly,
   type Block,
+  type FantamsOptions,
+  fantamsAssembler,
   inMemoryAssembler,
   type RasmOptions,
   rasmAssembler,

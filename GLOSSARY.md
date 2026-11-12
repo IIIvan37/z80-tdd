@@ -13,7 +13,7 @@ One execution of a **Routine** inside the tool, from its entry label until it re
 _Avoid_: Call, execution, invocation
 
 **Assembler**:
-The external program that turns the CPC project's source into machine code and a symbol table; RASM is the first one supported.
+The external program that turns the CPC project's source into machine code and a symbol table; z80-tdd supports RASM and FantAMS.
 _Avoid_: Compiler, toolchain
 
 **Configuration file**:

@@ -2,7 +2,7 @@
 
 Write the Z80 assembly of an Amstrad CPC project test-first. Each Vitest test runs a Routine of your real project on an emulated Z80, then checks the registers, flags, memory and duration in NOPs it leaves behind.
 
-> **Status:** 0.1.1, published as a GitHub release, not on npm. Registers, flags, memory, NOP counts, the NOP limit, ports, Stubs, RASM and the configuration file work. [example/](example/) is a small CPC project tested with each of them. See [Limits](#limits) for what z80-tdd does not do yet.
+> **Status:** 0.1.1, published as a GitHub release, not on npm. Registers, flags, memory, NOP counts, the NOP limit, ports, Stubs, RASM, FantAMS and the configuration file work. [example/](example/) is a small CPC project tested with each of them. See [Limits](#limits) for what z80-tdd does not do yet.
 
 ## What a test looks like
 
@@ -74,7 +74,9 @@ z80-tdd needs Node.js 24 or later and Vitest.
    pnpm add -D https://github.com/IIIvan37/z80-tdd/releases/download/v0.1.1/z80-tdd-0.1.1.tgz vitest
    ```
 
-2. Install RASM, the Assembler z80-tdd supports. Download it from [the RASM releases](https://github.com/EdouardBERGE/rasm/releases), then put `rasm` on the PATH. z80-tdd is tested with RASM v3.3.1.
+2. Install the Assembler of the project, then put it on the PATH:
+   - RASM, the default: download it from [the RASM releases](https://github.com/EdouardBERGE/rasm/releases). z80-tdd is tested with RASM v3.3.1.
+   - FantAMS: it has no release, so build it from [its repository](https://github.com/sikorama/fantams) with `make fantams`, and set `assembler: fantamsAssembler()` in the configuration file. z80-tdd is tested with FantAMS at commit `a3c76c7`.
 
 3. Write `z80-tdd.config.ts` at the root of the CPC project, with at least the source file to assemble (see below):
 
@@ -98,7 +100,7 @@ z80-tdd needs Node.js 24 or later and Vitest.
 import { defineConfig, rasmAssembler } from "z80-tdd";
 
 export default defineConfig({
-  assembler: rasmAssembler({ path: "tools/rasm" }), // `rasm` on the PATH by default
+  assembler: rasmAssembler({ path: "tools/rasm" }), // `rasm` on the PATH by default; or fantamsAssembler()
   source: "src/main.asm",                           // what loadProgram() assembles
   sp: 0xc000,                                       // the SP a Run starts with; #C000 by default
   nopLimit: 1_000_000,                              // the longest a Run may last; 1,000,000 NOPs by default
@@ -108,7 +110,8 @@ export default defineConfig({
 
 - A test file overrides any setting: `loadProgram({ source: "src/clear.asm" })`.
 - A Run overrides the SP, the NOP limit and the Port mask: `program.run("clear_buffer", { registers: { sp: 0x8000 }, nopLimit: 500 })`.
-- z80-tdd reads the nearest `z80-tdd.config.ts` in the folder where Vitest runs or in a folder above it. That folder is the project root: `source`, and a path to `rasm` that holds a folder, start from there.
+- z80-tdd reads the nearest `z80-tdd.config.ts` in the folder where Vitest runs or in a folder above it. That folder is the project root: `source`, and a path to `rasm` or `fantams` that holds a folder, start from there.
+- FantAMS opens every INCLUDE from the folder it runs in, so z80-tdd runs it in the folder of the source file. A source that needs FantAMS's linker, with a section without ORG or an extern symbol, fails the test.
 - A setting it does not know, or a value it refuses, fails the test and names the setting.
 
 ## Running a Routine
@@ -216,7 +219,7 @@ A NOP is the CPC unit of time: one microsecond. The CPC stretches each memory ac
 - `loadProgram()` loads the Program in 64 KB of RAM: no ROM, no firmware, no memory banking, no video. Replace a firmware call with a Stub.
 - The Run executes no interrupt. A Routine that waits for one, such as a `HALT`, reaches its NOP limit.
 - Port writes stay raw, as a port address and a value. z80-tdd does not decode them into CRTC registers or Gate Array commands.
-- RASM is the only Assembler. A test file is TypeScript run by Vitest: there is no standalone runner and no code coverage of Routines.
+- RASM and FantAMS are the only Assemblers. A test file is TypeScript run by Vitest: there is no standalone runner and no code coverage of Routines.
 
 ## Developing z80-tdd
 
@@ -227,7 +230,7 @@ pnpm test:core   # downloads SingleStepTests, then checks the Z80 core against i
 pnpm build:wasm  # rebuilds src/cpu/cell80.wasm; needs the Rust toolchain of wasm/rust-toolchain.toml
 ```
 
-The RASM contract tests and the example project need `rasm` on the PATH. The vocabulary is in [GLOSSARY.md](GLOSSARY.md), the decisions in [docs/adr/](docs/adr/), the modules in [docs/MODULES.md](docs/MODULES.md).
+The RASM contract tests and the example project need `rasm` on the PATH, the FantAMS contract tests `fantams`. The vocabulary is in [GLOSSARY.md](GLOSSARY.md), the decisions in [docs/adr/](docs/adr/), the modules in [docs/MODULES.md](docs/MODULES.md).
 
 ## Credits and licence
 

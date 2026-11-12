@@ -27,7 +27,7 @@ A second Assembler, `fantamsAssembler()`, set in `z80-tdd.config.ts` or given to
 - **Label case (story 9).** A Program keeps looking labels up whatever their case (ADR 0006), for every Assembler. A name that matches several labels of the Assembly fails and names them all. ADR 0006 gets this consequence.
 - **The `.fo` object file.** The adapter runs `fantams <source> -o <temporary folder>/program.fo`. Checked with FantAMS built at commit `a3c76c7` (`fantams --version`: `2026-09-08`):
   - The first line is `fantams-object 2`. Any other version fails, naming it.
-  - Each `fragment` gives the address the block is stored at in `addr=` (the run address is `logical=`), then `data <site> <XX>…` lines of bytes. `gap <n>` lines are bytes a `ds` reserved without writing them.
+  - Each `fragment` gives the address the block is stored at in `addr=` (the run address is `logical=`), then `data <site> <XX>…` lines of bytes. `gap <n>` lines are bytes an `align` skips without writing them; an `uninit` section has a fragment with no byte.
   - `symbol "<name>" label|const …  value=0x…`: labels and EQU symbols. Variables (`x = 3`) are not written.
   - Two fragments may share addresses (two `org #4000`); the later one wins, as when the linker places them in order.
 - **Linking (story 8).** A fragment marked `unplaced`, or any `reloc` line, means the source needs the linker. The adapter refuses it.
