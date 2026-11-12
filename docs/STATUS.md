@@ -12,30 +12,28 @@ appartenaient à l'ancien dépôt, supprimé. Le README pour la 0.1.0 est la PR 
 La durée d'un pas reste lue dans la table de Madram (ADR 0002) : la mesure sur cell80 est dans le rapport du 2026-10-24.
 Étape FantAMS livrée par la PR #6 : second Assembler, `fantamsAssembler()`, à côté de RASM ; il lit le `.fo` (ADR 0010).
 Un nom qui correspond à plusieurs labels, casse ignorée, échoue pour tout Assembler (ADR 0006).
-Gate local vert : 2 037 tests, plus 6 dans l'exemple. La CI GitHub ne tourne qu'au merge dans `main`, hors Markdown seul.
+Étape follow-ups en cours sur `feat/follow-ups` (`.scratch/follow-ups/`) : tickets 01 à 03 commités, revue avant PR pas faite.
+PR #7 ouverte (pas de npm pour le moment). Gate local vert : 2 040 tests, plus 6 dans l'exemple ; `pnpm test:core` vert.
+La CI GitHub ne tourne qu'au merge dans `main`, hors Markdown seul.
 Le dépôt public `IIIvan37/z80-tdd-sorts` emploie z80-tdd 0.1.0 par son tarball. Il porte sept articles livrés, de `intro` à `strcmp`.
 Modules : [docs/MODULES.md](MODULES.md), règles : [CODING_STANDARDS.md](../CODING_STANDARDS.md),
 specs : [.scratch/z80-tdd-v1/spec.md](../.scratch/z80-tdd-v1/spec.md), [.scratch/fantams-assembler/spec.md](../.scratch/fantams-assembler/spec.md).
 
 ## Prochaine action
 
-Vérifier que la CI de `main` compile FantAMS et passe, puis choisir la prochaine étape avec l'utilisateur.
+Lancer `mattpocock-skills:code-review` sur `main...HEAD` de `feat/follow-ups`, puis `simplify`, puis push et PR.
 
 ## Questions ouvertes
 
-- Ajouter un test qui compare `nops.ts` au modèle d'alignement des `tick()` de cell80 (3 524 accords sur 3 560, 36 exceptions connues) ?
-- Publier sur npm, et quand ? La publication annule l'ADR 0009.
-  pnpm 10 écrit le lockfile sans integrity quand son store contient déjà le tarball (vu dans `z80-tdd-sorts`, corrigé par pnpm 11.9).
-- Vérifier dans `loadProgram()` que le source existe, avec un message commun aux Assemblers ? Le repli de FantAMS sur la racine partirait.
-- Un EQU négatif vaut `-16` chez FantAMS, `0xFFFFFFF0` chez RASM : aligner les deux ?
 - Extraire le code commun aux adaptateurs RASM et FantAMS : attendu jusqu'à un troisième Assembler.
 
 ## Tickets
 
 - Livrés : les onze tickets de la v1, la revue de jalon v1 et l'architecture de `run.ts` (PR de l'ancien dépôt).
 - Livrés : FantAMS 01 et 02 (`.scratch/fantams-assembler/issues/`), par la PR #6.
+- follow-ups (`.scratch/follow-ups/issues/`) : 01 à 03 `done`, sur la branche de l'étape, pas encore mergés.
 - Démarrables : aucun.
-- Prochain : aucun ticket.
+- Prochain : aucun ticket ; la revue avant PR clôt l'étape.
 
 ## Historique
 
@@ -49,3 +47,4 @@ Vérifier que la CI de `main` compile FantAMS et passe, puis choisir la prochain
 - 2026-10-24 · **release 0.1.0** : mesure des T-states, dépôt public à l'historique réécrit, tarball de release (ADR 0009).
 - 2026-10-25 · **status-sorts-repo** : STATUS pointé vers `z80-tdd-sorts`, question npm complétée (PR #3).
 - 2026-11-12 · **FantAMS** : label ambigu par la casse (ADR 0006), `fantamsAssembler()` lisant le `.fo` (ADR 0010), revue, PR #6.
+- 2026-11-12 · **follow-ups** : PR #6 mergée, PR #7 (pas de npm), source absent, EQU signé, `nops.ts` contre l'horloge cell80.
