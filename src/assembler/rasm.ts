@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { promisify, stripVTControlCharacters } from "node:util";
 import type { Assembler, Block } from "./assembler.ts";
+import { sourceFile } from "./source-file.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -42,13 +43,14 @@ export function rasmAssembler({ path = "rasm" }: RasmOptions = {}): Assembler {
       // rasm runs in a temporary folder: a path with a folder in it must not
       // resolve from there, and a bare name stays a PATH lookup.
       const command = path === basename(path) ? path : resolve(root, path);
+      const file = await sourceFile(source, root);
       const dir = await mkdtemp(join(tmpdir(), "z80-tdd-rasm-"));
       try {
         // A source with its own SAVE gets no default binary from rasm, so a
         // wrapper includes it and saves the whole 64 KB.
         await writeFile(
           join(dir, "program.asm"),
-          ` include ${quoted(resolve(root, source))}\n save 'memory.bin',0,65536\n`,
+          ` include ${quoted(file)}\n save 'memory.bin',0,65536\n`,
         );
         const { stdout } = await execFileAsync(command, ARGS, {
           cwd: dir,
@@ -106,9 +108,10 @@ function errorsOf(output: string): string[] {
 
 function symbolsOf(text: string): Record<string, number> {
   return Object.fromEntries(
-    [...text.matchAll(SYMBOL_LINE)].map(([, label, address]) => [
+    // rasm writes -16 as #FFFFFFF0: `| 0` reads it as a signed 32-bit number.
+    [...text.matchAll(SYMBOL_LINE)].map(([, label, value]) => [
       label,
-      Number.parseInt(address as string, 16),
+      Number.parseInt(value as string, 16) | 0,
     ]),
   );
 }

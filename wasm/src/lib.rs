@@ -16,29 +16,43 @@ const STATE_LENGTH: usize = 20;
 static mut MEMORY: [u8; 0x10000] = [0; 0x10000];
 static mut STATE: [u16; STATE_LENGTH] = [0; STATE_LENGTH];
 static mut CPU: Option<z80::Cpu> = None;
+/// The T-states elapsed, aligned as on the CPC: its gate array starts each bus
+/// access, and each instruction, on a multiple of 4 T-states, one NOP.
+static mut CLOCK: u32 = 0;
+
+fn align_clock() {
+    unsafe { CLOCK = CLOCK.wrapping_add(3) & !3 }
+}
 
 fn cpu() -> &'static mut z80::Cpu {
     unsafe { (*addr_of_mut!(CPU)).get_or_insert_with(z80::Cpu::new) }
 }
 
-/// Memory and ports; `host_trap` keeps its default, so `ED FE` stays a no-op.
+/// Memory, ports and the clock; `host_trap` keeps its default, so `ED FE` stays a no-op.
+/// cell80 calls each access before the `tick()` that counts it.
 struct Bus;
 
 impl z80::Bus for Bus {
     fn read(&mut self, address: u16) -> u8 {
+        align_clock();
         unsafe { (*addr_of_mut!(MEMORY))[address as usize] }
     }
     fn write(&mut self, address: u16, value: u8) {
+        align_clock();
         unsafe { (*addr_of_mut!(MEMORY))[address as usize] = value }
     }
     fn input(&mut self, port: u16) -> u8 {
+        align_clock();
         unsafe { io_in(port as u32) as u8 }
     }
     fn output(&mut self, port: u16, value: u8) {
+        align_clock();
         unsafe { io_out(port as u32, value as u32) }
     }
     fn contend(&mut self, _: u16, _: u32) {}
-    fn tick(&mut self, _: u32) {}
+    fn tick(&mut self, cycles: u32) {
+        unsafe { CLOCK = CLOCK.wrapping_add(cycles) }
+    }
 }
 
 fn pair(high: u8, low: u8) -> u16 {
@@ -116,7 +130,14 @@ pub extern "C" fn write_state() {
 
 #[no_mangle]
 pub extern "C" fn step() {
-    cpu().step(&mut Bus)
+    cpu().step(&mut Bus);
+    align_clock();
+}
+
+/// The NOPs elapsed since the instance started, by the aligned clock.
+#[no_mangle]
+pub extern "C" fn elapsed_nops() -> u32 {
+    unsafe { CLOCK / 4 }
 }
 
 /// Room for the longest mnemonic `disassemble` writes, such as `LD (IX+$7F),$FF`.

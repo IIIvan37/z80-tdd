@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { Assembler, Block } from "./assembler.ts";
+import { sourceFile } from "./source-file.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -48,19 +48,16 @@ export function fantamsAssembler({
       // fantams runs in the source file's folder: a path with a folder in it
       // must not resolve from there, and a bare name stays a PATH lookup.
       const command = path === basename(path) ? path : resolve(root, path);
-      const file = resolve(root, source);
+      const file = await sourceFile(source, root);
       const dir = await mkdtemp(join(tmpdir(), "z80-tdd-fantams-"));
       try {
         const object = join(dir, "program.fo");
-        // FantAMS opens every INCLUDE from the folder it runs in. Without
-        // that folder, it runs from the root and reports the missing source.
-        const folder = dirname(file);
-        const cwd = existsSync(folder) ? folder : root;
-        await execFileAsync(command, [file, "-o", object], { cwd }).catch(
-          (error: FantamsError) => {
-            throw failureOf(error, path, source);
-          },
-        );
+        // FantAMS opens every INCLUDE from the folder it runs in.
+        await execFileAsync(command, [file, "-o", object], {
+          cwd: dirname(file),
+        }).catch((error: FantamsError) => {
+          throw failureOf(error, path, source);
+        });
         const text = await readFile(object, "utf8");
         const version = text.match(HEADER)?.[1];
         if (version !== "2") {
