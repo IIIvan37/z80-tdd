@@ -24,8 +24,6 @@ Vérifier que la CI de `main` compile FantAMS et passe, puis choisir la prochain
 ## Questions ouvertes
 
 - Ajouter un test qui compare `nops.ts` au modèle d'alignement des `tick()` de cell80 (3 524 accords sur 3 560, 36 exceptions connues) ?
-- Publier sur npm, et quand ? La publication annule l'ADR 0009.
-  pnpm 10 écrit le lockfile sans integrity quand son store contient déjà le tarball (vu dans `z80-tdd-sorts`, corrigé par pnpm 11.9).
 - Vérifier dans `loadProgram()` que le source existe, avec un message commun aux Assemblers ? Le repli de FantAMS sur la racine partirait.
 - Un EQU négatif vaut `-16` chez FantAMS, `0xFFFFFFF0` chez RASM : aligner les deux ?
 - Extraire le code commun aux adaptateurs RASM et FantAMS : attendu jusqu'à un troisième Assembler.
