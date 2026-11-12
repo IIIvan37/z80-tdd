@@ -16,7 +16,8 @@
   `Cpu.elapsedNops()`, test `src/nops.cell80.test.ts` dans `pnpm test:core` (un test par fichier de la suite, 9,5 s).
   - Écarts trouvés = écarts connus : 16 `IN r,(C)`/`OUT (C),r` (table 4, horloge 3), `OTIR`/`OTDR` répétés (6 contre 7).
   - 1 653 accords sur 1 671 combinaisons distinctes (instruction, NOPs table, NOPs horloge). La mesure du 2026-10-24
-    (3 524 sur 3 560, 36 écarts) comptait sur une autre base, invérifiable : mêmes instructions, 36 = 2 × 18.
+    (3 524 sur 3 560, 36 écarts) comptait sur une autre base, qu'on ne retrouve pas : écart non expliqué.
+    Indice seulement : mêmes instructions en écart, et 36 = 2 × 18. Le test ne calcule pas de nombre d'accords.
   - Exception nommée dans `.dependency-cruiser.cjs` et phrase ajoutée à la règle 3 de `CODING_STANDARDS.md`.
 
 ## Non fait / reste
