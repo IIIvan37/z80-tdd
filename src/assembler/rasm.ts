@@ -108,9 +108,10 @@ function errorsOf(output: string): string[] {
 
 function symbolsOf(text: string): Record<string, number> {
   return Object.fromEntries(
-    [...text.matchAll(SYMBOL_LINE)].map(([, label, address]) => [
+    // rasm writes -16 as #FFFFFFF0: `| 0` reads it as a signed 32-bit number.
+    [...text.matchAll(SYMBOL_LINE)].map(([, label, value]) => [
       label,
-      Number.parseInt(address as string, 16),
+      Number.parseInt(value as string, 16) | 0,
     ]),
   );
 }

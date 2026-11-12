@@ -58,10 +58,15 @@ describe("the RASM Assembler, with the real rasm", () => {
     ]);
   });
 
-  it("gives the symbols defined by EQU along with the labels", async () => {
+  it("gives the symbols defined by EQU along with the labels, signed", async () => {
     const assembly = await rasmAssembler().assemble("equ.asm", FIXTURES);
 
-    expect(assembly.symbols).toEqual({ START: 0x4000, BUFFER: 0x9000 });
+    expect(assembly.symbols).toEqual({
+      START: 0x4000,
+      BUFFER: 0x9000,
+      MINUS: -16,
+      BIG: 0x12345,
+    });
   });
 
   it("assembles an INCLUDE relative to the including file", async () => {

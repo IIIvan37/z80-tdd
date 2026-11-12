@@ -6,3 +6,4 @@ A Program finds a label whatever its case: `program.run("double")` runs the labe
 
 - The rule holds for every Assembler, including FantAMS, which tells `Loop` from `loop`. A name that matches several labels whatever their case fails and names them all: the test writes another name, never runs one of them by chance. Such labels do not stop the Program from loading; only the ambiguous name fails.
 - A failure report shows labels as the Assembler gives them: in capitals with RASM.
+- A symbol's value is signed, for every Assembler: `minus equ -16` gives -16. RASM exports it as `#FFFFFFF0`, and its adapter reads that as a signed 32-bit number.

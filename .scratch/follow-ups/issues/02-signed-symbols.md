@@ -4,8 +4,8 @@
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `#FFFFFFF0` in RASM's symbol export gives -16; `#12345` stays #12345.
-- [ ] A RASM contract test assembles a fixture with a negative EQU and a label, and checks both values.
-- [ ] ADR 0006 states that a symbol's value is signed, for every Assembler.
+- [x] `#FFFFFFF0` in RASM's symbol export gives -16; `#12345` stays #12345.
+- [x] A RASM contract test assembles a fixture with a negative EQU and a label, and checks both values.
+- [x] ADR 0006 states that a symbol's value is signed, for every Assembler.
