@@ -67,4 +67,9 @@ export interface Cpu {
   setInternals(values: Partial<Internals>): void;
   /** Executes one instruction; a repeated block instruction such as `LDIR` executes one iteration. */
   step(): void;
+  /**
+   * The NOPs elapsed since the Cpu was created, by cell80's clock aligned on 4 at each bus access
+   * and each instruction, as on the CPC. A Run counts its NOPs with nops.ts instead (ADR 0002).
+   */
+  elapsedNops(): number;
 }

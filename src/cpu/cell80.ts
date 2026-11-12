@@ -37,6 +37,7 @@ interface Exports {
   read_state(): void;
   write_state(): void;
   step(): void;
+  elapsed_nops(): number;
   text_ptr(): number;
   disassemble(pc: number, bytes: number): number;
 }
@@ -222,5 +223,6 @@ export function createCpu(ports: Ports = NO_PORTS): Cpu {
       wasm.write_state();
     },
     step: () => wasm.step(),
+    elapsedNops: () => wasm.elapsed_nops(),
   };
 }

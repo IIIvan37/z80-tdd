@@ -4,11 +4,11 @@
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The Rust bus in `wasm/src/lib.rs` counts the T-states of `tick()`, aligns the count up to a multiple of 4 at each `read`, `write`, `input` and `output` and at the end of `step()`, and exposes it; `src/cpu/cell80.ts` reads it.
-- [ ] A Run still reads its NOPs from `nops.ts`: only the test reads the clock.
-- [ ] The test runs in `pnpm test:core` on the fetched SingleStepTests suite. It lists the known differences (`IN r,(C)`, `OUT (C),r`, repeated `OTIR` and `OTDR`) and fails on any other, naming the instruction, `nops.ts`'s NOPs and the clock's.
-- [ ] The agreement count matches the 2026-10-24 measurement (3 524 out of 3 560), or the difference is explained in the session report.
-- [ ] `cell80.wasm` rebuilt with `pnpm build:wasm` and committed.
-- [ ] ADR 0002 gets the consequence; docs/MODULES.md describes the clock in the CPU module.
+- [x] The Rust bus in `wasm/src/lib.rs` counts the T-states of `tick()`, aligns the count up to a multiple of 4 at each `read`, `write`, `input` and `output` and at the end of `step()`, and exposes it; `src/cpu/cell80.ts` reads it.
+- [x] A Run still reads its NOPs from `nops.ts`: only the test reads the clock.
+- [x] The test runs in `pnpm test:core` on the fetched SingleStepTests suite. It lists the known differences (`IN r,(C)`, `OUT (C),r`, repeated `OTIR` and `OTDR`) and fails on any other, naming the instruction, `nops.ts`'s NOPs and the clock's.
+- [x] The agreement count matches the 2026-10-24 measurement (3 524 out of 3 560), or the difference is explained in the session report. (Same 18 instructions; counted by distinct instruction and NOP counts: 1 653 out of 1 671.)
+- [x] `cell80.wasm` rebuilt with `pnpm build:wasm` and committed.
+- [x] ADR 0002 gets the consequence; docs/MODULES.md describes the clock in the CPU module.
