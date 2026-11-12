@@ -21,7 +21,7 @@ const NEEDS_LINKER = /^(?:fragment .* unplaced |reloc )/m;
 const BANKED = /^fragment .* bank=(?!-1\b)/m;
 // Labels and EQU symbols; FantAMS writes no variable.
 const SYMBOL_LINE =
-  /^symbol "((?:[^"\\]|\\.)*)" (?:label|const) .*\bvalue=(-?)(0x[0-9A-F]+)\b/gm;
+  /^symbol "((?:[^"\\]|\\.)*)" (?:label|const) .*\bvalue=(-?0x[0-9A-F]+)\b/gm;
 // `<file>:<line>: error: <message>`, or `error (preproc):`; warnings left out.
 const ERROR_LINE = /^.+:\d+: error\b.*$/gm;
 // No release to download: FantAMS is built from its sources.
@@ -104,37 +104,33 @@ function blocksOf(text: string): Block[] {
   const blocks: Block[] = [];
   for (const [, start, lines] of text.matchAll(FRAGMENT)) {
     let address = Number(start);
-    let bytes: number[] = [];
-    const close = () => {
-      if (bytes.length > 0) {
-        blocks.push({ address: address - bytes.length, bytes });
-        bytes = [];
-      }
-    };
+    // The block that the next data line extends; a gap ends it.
+    let block: { address: number; bytes: number[] } | undefined;
     for (const line of (lines as string).split("\n")) {
       const [kind, ...fields] = line.trim().split(" ");
       if (kind === "data") {
-        const written = fields
-          .slice(1)
-          .map((byte) => Number.parseInt(byte, 16));
-        bytes.push(...written);
+        const [, ...written] = fields; // after the site of the line
+        if (block === undefined && written.length > 0) {
+          block = { address, bytes: [] };
+          blocks.push(block);
+        }
+        block?.bytes.push(...written.map((byte) => Number.parseInt(byte, 16)));
         address += written.length;
       } else if (kind === "gap") {
-        close();
+        block = undefined;
         address += Number(fields[0]);
       }
     }
-    close();
   }
   return blocks;
 }
 
 function symbolsOf(text: string): Record<string, number> {
   return Object.fromEntries(
-    // Number() reads 0x10 but not -0x10.
-    [...text.matchAll(SYMBOL_LINE)].map(([, name, sign, value]) => [
+    // parseInt reads -0x10, which Number() does not.
+    [...text.matchAll(SYMBOL_LINE)].map(([, name, value]) => [
       name,
-      sign === "-" ? -Number(value) : Number(value),
+      Number.parseInt(value as string, 16),
     ]),
   );
 }

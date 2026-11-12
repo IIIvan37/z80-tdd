@@ -40,22 +40,27 @@ export async function loadProgram(
   }
   const byAddress = [...labelAt].sort(([a], [b]) => a - b);
   // Labels match whatever their case (ADR 0006): each name, in capitals, gives every label it matches.
-  const byName = new Map<string, string[]>();
-  for (const label of Object.keys(assembly.symbols)) {
+  const byName = new Map<string, { address: number; labels: string[] }>();
+  for (const [label, address] of Object.entries(assembly.symbols)) {
     const name = label.toUpperCase();
-    byName.set(name, [...(byName.get(name) ?? []), label]);
+    const match = byName.get(name);
+    if (match === undefined) {
+      byName.set(name, { address, labels: [label] });
+    } else {
+      match.labels.push(label);
+    }
   }
   const addressOf = (name: string): number => {
-    const labels = byName.get(name.toUpperCase());
-    if (labels === undefined) {
+    const match = byName.get(name.toUpperCase());
+    if (match === undefined) {
       throw new Error(`The Program has no label "${name}"`);
     }
-    if (labels.length > 1) {
+    if (match.labels.length > 1) {
       throw new Error(
-        `The name "${name}" matches several labels of the Program, whatever their case: ${labels.join(", ")}`,
+        `The name "${name}" matches several labels of the Program, whatever their case: ${match.labels.join(", ")}`,
       );
     }
-    return assembly.symbols[labels[0] as string] as number;
+    return match.address;
   };
 
   const loaded: LoadedProgram = {
