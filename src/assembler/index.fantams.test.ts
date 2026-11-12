@@ -126,12 +126,16 @@ describe("the FantAMS Assembler, with the real fantams", () => {
     );
   });
 
-  it("fails like fantams on a source whose folder does not exist", async () => {
+  it("fails on a source file that does not exist, naming it", async () => {
+    await expect(
+      fantamsAssembler().assemble("missing.asm", FIXTURES),
+    ).rejects.toThrow('The source file "missing.asm" does not exist');
+  });
+
+  it("fails on a source whose folder does not exist, naming it", async () => {
     await expect(
       fantamsAssembler().assemble("nowhere/main.asm", FIXTURES),
-    ).rejects.toThrow(
-      /^FantAMS could not assemble nowhere\/main\.asm:\nerror: file not found: \S*nowhere\/main\.asm$/,
-    );
+    ).rejects.toThrow('The source file "nowhere/main.asm" does not exist');
   });
 
   it("fails on a .fo object of a version it does not read, naming it", async () => {

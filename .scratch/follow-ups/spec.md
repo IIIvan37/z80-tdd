@@ -12,7 +12,7 @@ Three loose ends were left open when the FantAMS Assembler shipped (PR #6):
 
 ## Solution
 
-- `loadProgram()` checks that the source file exists before it calls the Assembler, and fails with one message for every Assembler. The FantAMS adapter always runs in the source file's folder.
+- The Assemblers that read a file check that the source file exists before they run their tool, through one function of the Assembler module, and fail with one message. The FantAMS adapter always runs in the source file's folder.
 - Every Assembler gives a symbol its signed value: the RASM adapter reads its symbol export as a signed 32-bit number.
 - The WebAssembly build of cell80 counts T-states, aligned as measured, and exposes them. A test of `pnpm test:core` compares each instruction's NOPs in `nops.ts` with that count, the 36 known differences listed.
 
@@ -24,7 +24,7 @@ Three loose ends were left open when the FantAMS Assembler shipped (PR #6):
 
 ## Implementation Decisions
 
-- **Missing source (story 1).** The check sits in `loadProgram()`, on the source resolved from the project root (ADR 0008), before `assembler.assemble()`. The message names the source as the configuration wrote it. The FantAMS adapter drops its fallback to the project root, and ADR 0010 drops its consequence line about it.
+- **Missing source (story 1).** The check cannot sit in `loadProgram()`: the in-memory Assembler reads no file, and its tests name a source that is not on disk. One function of the Assembler module resolves the source from the project root (ADR 0008) and fails when it is not there; the RASM and FantAMS adapters call it before running their tool. The message names the source as the configuration wrote it. The FantAMS adapter drops its fallback to the project root, and ADR 0010 drops its consequence line about it.
 - **Signed symbols (story 2).** RASM writes `-16` as `#FFFFFFF0` in its symbol export. The RASM adapter reads it as a signed 32-bit number, so `#FFFFFFF0` gives -16 and `#12345` stays #12345. FantAMS already writes `value=-0x10`. ADR 0006 states that a symbol's value is signed.
 - **Clock (story 3).**
   - The Rust bus in `wasm/src/lib.rs` counts the T-states `tick()` gives, aligns the count up to a multiple of 4 at each bus access (`read`, `write`, `input`, `output`) and at the end of each instruction, and exposes the count to `src/cpu/cell80.ts`. The rules come from the 2026-10-24 report; the implementer checks where cell80 calls `tick()` relative to each access.
@@ -34,7 +34,7 @@ Three loose ends were left open when the FantAMS Assembler shipped (PR #6):
 
 ## Testing Decisions
 
-- Story 1 is tested through `loadProgram()` with the in-memory Assembler, and with a FantAMS source in a missing folder through `loadProgram()`.
+- Story 1 is tested by the contract tests of both adapters: a missing source file, and a source in a missing folder.
 - Story 2 is tested by the RASM contract tests on a fixture with a negative EQU; the FantAMS contract test already covers it.
 - Story 3 is a test of `pnpm test:core`, which runs on the SingleStepTests suite already fetched there: each case gives an instruction and the state before it, which is what `nops.ts` needs.
 

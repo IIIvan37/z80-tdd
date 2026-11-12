@@ -10,6 +10,5 @@ FantAMS opens an INCLUDE path as written, from the folder it runs in, even insid
 - An `align` writes a `gap` line: those bytes are not part of a block. An `uninit` section gives labels and no byte.
 - A source that needs FantAMS's linker fails: a fragment `unplaced` (a section without ORG) or a `reloc` line (an extern symbol, or a jump into such a section). The bytes of such an object are not final.
 - A fragment stored in a bank (`bank=` other than `-1`) fails: z80-tdd loads only the main 64 KB.
-- When the source file's folder does not exist, `fantams` runs from the project root and reports the missing source itself.
 - FantAMS has no release, no tag and no licence file. z80-tdd does not bundle it, nor its WebAssembly build; CI builds it at a pinned commit.
 - FantAMS tells `Loop` from `loop`; ADR 0006 covers two such labels.
