@@ -2,7 +2,7 @@
 
 Write the Z80 assembly of an Amstrad CPC project test-first. Each Vitest test runs a Routine of your real project on an emulated Z80, then checks the registers, flags, memory and duration in NOPs it leaves behind.
 
-> **Status:** 0.1.1, published as a GitHub release, not on npm. Registers, flags, memory, NOP counts, the NOP limit, ports, Stubs, RASM, FantAMS and the configuration file work. [example/](example/) is a small CPC project tested with each of them. See [Limits](#limits) for what z80-tdd does not do yet.
+> **Status:** 0.2.0, published as a GitHub release, not on npm. Registers, flags, memory, NOP counts, the NOP limit, ports, Stubs, RASM, FantAMS and the configuration file work. [example/](example/) is a small CPC project tested with each of them. See [Limits](#limits) for what z80-tdd does not do yet.
 
 ## What a test looks like
 
@@ -68,10 +68,10 @@ describe("clear_buffer", () => {
 
 z80-tdd needs Node.js 24 or later and Vitest.
 
-1. Add z80-tdd and Vitest to the CPC project, as dev dependencies. z80-tdd comes from the tarball of [its GitHub release](https://github.com/IIIvan37/z80-tdd/releases/tag/v0.1.1):
+1. Add z80-tdd and Vitest to the CPC project, as dev dependencies. z80-tdd comes from the tarball of [its GitHub release](https://github.com/IIIvan37/z80-tdd/releases/tag/v0.2.0):
 
    ```sh
-   pnpm add -D https://github.com/IIIvan37/z80-tdd/releases/download/v0.1.1/z80-tdd-0.1.1.tgz vitest
+   pnpm add -D https://github.com/IIIvan37/z80-tdd/releases/download/v0.2.0/z80-tdd-0.2.0.tgz vitest
    ```
 
 2. Install the Assembler of the project, then put it on the PATH:
