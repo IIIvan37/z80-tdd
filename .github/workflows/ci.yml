@@ -24,6 +24,14 @@ jobs:
           git clone --depth 1 --branch v3.3.1 https://github.com/EdouardBERGE/rasm.git "$RUNNER_TEMP/rasm"
           make -C "$RUNNER_TEMP/rasm" -f Makefile.linux -j"$(nproc)"
           sudo install "$RUNNER_TEMP/rasm/rasm" /usr/local/bin/rasm
+      # The FantAMS contract tests run the real fantams. It has no release: a commit is pinned.
+      - name: Install FantAMS at a3c76c7
+        run: |
+          git init -q "$RUNNER_TEMP/fantams"
+          git -C "$RUNNER_TEMP/fantams" fetch -q --depth 1 https://github.com/sikorama/fantams.git a3c76c7d7d4670b3c0a56ce5a662da300bda18ea
+          git -C "$RUNNER_TEMP/fantams" checkout -q FETCH_HEAD
+          make -C "$RUNNER_TEMP/fantams" -j"$(nproc)" fantams
+          sudo install "$RUNNER_TEMP/fantams/fantams" /usr/local/bin/fantams
       - run: pnpm gate
 
   core:

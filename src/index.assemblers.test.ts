@@ -2,7 +2,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { loadProgram, type Program, rasmAssembler } from "./index.ts";
+import {
+  fantamsAssembler,
+  loadProgram,
+  type Program,
+  rasmAssembler,
+} from "./index.ts";
 
 // The table sits in a block of its own at #C000, just above the default SP.
 const SOURCE = `
@@ -16,7 +21,10 @@ table:
  defb 7
 `;
 
-describe("a Program assembled by RASM", () => {
+describe.each([
+  ["RASM", rasmAssembler],
+  ["FantAMS", fantamsAssembler],
+])("a Program assembled by %s", (_, assembler) => {
   let dir: string;
   let program: Program;
 
@@ -25,7 +33,7 @@ describe("a Program assembled by RASM", () => {
     await writeFile(join(dir, "main.asm"), SOURCE);
     program = await loadProgram({
       source: join(dir, "main.asm"),
-      assembler: rasmAssembler(),
+      assembler: assembler(),
     });
   });
 

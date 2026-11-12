@@ -37,7 +37,8 @@ const SETTINGS: Readonly<Record<keyof ConfigurationFile, Setting>> = {
   assembler: {
     accepts: (value) =>
       typeof (value as Partial<Assembler> | undefined)?.assemble === "function",
-    takes: 'an Assembler, such as rasmAssembler({ path: "/path/to/rasm" })',
+    takes:
+      'an Assembler, such as rasmAssembler({ path: "/path/to/rasm" }) or fantamsAssembler()',
   },
   source: {
     accepts: (value) => typeof value === "string" && value !== "",
