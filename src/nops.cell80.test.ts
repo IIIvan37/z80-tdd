@@ -1,5 +1,6 @@
 // Compares the NOPs of nops.ts with the cell80 clock on every case of SingleStepTests/z80
 // (ADR 0002). Run it with `pnpm test:core`, which fetches the suite first.
+// SUITE_DIR, State and registersOf copy src/cpu/single-step-tests.test.ts: keep them in step.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -31,7 +32,6 @@ interface State {
 }
 
 interface Case {
-  readonly name: string;
   readonly initial: State;
 }
 
@@ -93,8 +93,8 @@ describe("nops.ts against the cell80 clock", () => {
       readFileSync(join(SUITE_DIR, file), "utf8"),
     ) as Case[];
     const differences = new Set<string>();
+    // No memory reset between cases: every byte a step reads is in initial.ram.
     for (const test of cases) {
-      cpu.memory.fill(0);
       for (const [address, value] of test.initial.ram) {
         cpu.memory[address] = value;
       }
