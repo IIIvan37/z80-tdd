@@ -77,6 +77,15 @@ describe("a Program", () => {
     expect(() => program.run("loop")).toThrow(/"loop".*Loop, loop/);
   });
 
+  it("fails to give a range from a name that matches labels of different cases", async () => {
+    const program = await load({
+      blocks: [{ address: 0x4000, bytes: [RET, RET] }],
+      symbols: { Loop: 0x4000, loop: 0x4001 },
+    });
+
+    expect(() => program.range("loop", 2)).toThrow(/"loop".*Loop, loop/);
+  });
+
   it("gives the address of a label beside labels of different cases", async () => {
     const program = await load({
       blocks: [{ address: 0x4000, bytes: [RET, RET] }],

@@ -111,7 +111,7 @@ export default defineConfig({
 - A test file overrides any setting: `loadProgram({ source: "src/clear.asm" })`.
 - A Run overrides the SP, the NOP limit and the Port mask: `program.run("clear_buffer", { registers: { sp: 0x8000 }, nopLimit: 500 })`.
 - z80-tdd reads the nearest `z80-tdd.config.ts` in the folder where Vitest runs or in a folder above it. That folder is the project root: `source`, and a path to `rasm` or `fantams` that holds a folder, start from there.
-- FantAMS opens every INCLUDE from the folder it runs in, so z80-tdd runs it in the folder of the source file. A source that needs FantAMS's linker, with a section without ORG or an extern symbol, fails the test.
+- FantAMS opens every INCLUDE from the folder it runs in, so z80-tdd runs it in the folder of the source file. A source that needs FantAMS's linker, with a section without ORG or an extern symbol, fails the test, and so does a source that stores bytes in a bank.
 - A setting it does not know, or a value it refuses, fails the test and names the setting.
 
 ## Running a Routine

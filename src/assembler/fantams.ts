@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -16,9 +17,11 @@ const FRAGMENT =
 // A section without ORG, whose address the linker gives, or a relocation,
 // whose bytes it writes: an extern symbol, or a jump into such a section.
 const NEEDS_LINKER = /^(?:fragment .* unplaced |reloc )/m;
+// A fragment stored in a bank; `bank=-1` is the main 64 KB.
+const BANKED = /^fragment .* bank=(?!-1\b)/m;
 // Labels and EQU symbols; FantAMS writes no variable.
 const SYMBOL_LINE =
-  /^symbol "((?:[^"\\]|\\.)*)" (?:label|const) .*\bvalue=(-?0x[0-9A-F]+)\b/gm;
+  /^symbol "((?:[^"\\]|\\.)*)" (?:label|const) .*\bvalue=(-?)(0x[0-9A-F]+)\b/gm;
 // `<file>:<line>: error: <message>`, or `error (preproc):`; warnings left out.
 const ERROR_LINE = /^.+:\d+: error\b.*$/gm;
 // No release to download: FantAMS is built from its sources.
@@ -49,12 +52,15 @@ export function fantamsAssembler({
       const dir = await mkdtemp(join(tmpdir(), "z80-tdd-fantams-"));
       try {
         const object = join(dir, "program.fo");
-        // FantAMS opens every INCLUDE from the folder it runs in.
-        await execFileAsync(command, [file, "-o", object], {
-          cwd: dirname(file),
-        }).catch((error: FantamsError) => {
-          throw failureOf(error, path, source);
-        });
+        // FantAMS opens every INCLUDE from the folder it runs in. Without
+        // that folder, it runs from the root and reports the missing source.
+        const folder = dirname(file);
+        const cwd = existsSync(folder) ? folder : root;
+        await execFileAsync(command, [file, "-o", object], { cwd }).catch(
+          (error: FantamsError) => {
+            throw failureOf(error, path, source);
+          },
+        );
         const text = await readFile(object, "utf8");
         const version = text.match(HEADER)?.[1];
         if (version !== "2") {
@@ -65,6 +71,11 @@ export function fantamsAssembler({
         if (NEEDS_LINKER.test(text)) {
           throw new Error(
             `FantAMS cannot assemble ${source} without its linker: z80-tdd needs an ORG for each section and no extern symbol`,
+          );
+        }
+        if (BANKED.test(text)) {
+          throw new Error(
+            `FantAMS stored bytes of ${source} in a bank: z80-tdd loads only the main 64 KB`,
           );
         }
         return { blocks: blocksOf(text), symbols: symbolsOf(text) };
@@ -120,9 +131,10 @@ function blocksOf(text: string): Block[] {
 
 function symbolsOf(text: string): Record<string, number> {
   return Object.fromEntries(
-    [...text.matchAll(SYMBOL_LINE)].map(([, name, value]) => [
+    // Number() reads 0x10 but not -0x10.
+    [...text.matchAll(SYMBOL_LINE)].map(([, name, sign, value]) => [
       name,
-      Number(value),
+      sign === "-" ? -Number(value) : Number(value),
     ]),
   );
 }

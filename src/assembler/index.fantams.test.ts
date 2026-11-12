@@ -46,10 +46,23 @@ describe("the FantAMS Assembler, with the real fantams", () => {
     });
   });
 
-  it("gives the symbols defined by EQU along with the labels", async () => {
+  it("gives the symbols defined by EQU along with the labels, a negative one too", async () => {
     const assembly = await fantamsAssembler().assemble("equ.asm", FIXTURES);
 
-    expect(assembly.symbols).toEqual({ start: 0x4000, buffer: 0x9000 });
+    expect(assembly.symbols).toEqual({
+      start: 0x4000,
+      buffer: 0x9000,
+      minus: -16,
+    });
+  });
+
+  it("gives blocks that share addresses in the order FantAMS wrote them, so the later one wins", async () => {
+    const assembly = await fantamsAssembler().assemble("overlap.asm", FIXTURES);
+
+    expect(assembly.blocks).toEqual([
+      { address: 0x4000, bytes: [1, 2] },
+      { address: 0x4000, bytes: [3] },
+    ]);
   });
 
   it("opens each INCLUDE from the source file's folder, even a nested one", async () => {
@@ -102,6 +115,22 @@ describe("the FantAMS Assembler, with the real fantams", () => {
       fantamsAssembler().assemble("extern.asm", FIXTURES),
     ).rejects.toThrow(
       /^FantAMS cannot assemble extern\.asm without its linker/,
+    );
+  });
+
+  it("fails on bytes stored in a bank, which the main 64 KB does not hold", async () => {
+    await expect(
+      fantamsAssembler().assemble("bank.asm", FIXTURES),
+    ).rejects.toThrow(
+      "FantAMS stored bytes of bank.asm in a bank: z80-tdd loads only the main 64 KB",
+    );
+  });
+
+  it("fails like fantams on a source whose folder does not exist", async () => {
+    await expect(
+      fantamsAssembler().assemble("nowhere/main.asm", FIXTURES),
+    ).rejects.toThrow(
+      /^FantAMS could not assemble nowhere\/main\.asm:\nerror: file not found: \S*nowhere\/main\.asm$/,
     );
   });
 
