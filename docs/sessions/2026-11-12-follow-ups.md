@@ -20,11 +20,20 @@
     Indice seulement : mêmes instructions en écart, et 36 = 2 × 18. Le test ne calcule pas de nombre d'accords.
   - Exception nommée dans `.dependency-cruiser.cjs` et phrase ajoutée à la règle 3 de `CODING_STANDARDS.md`.
 
+## Revue avant PR (même jour, seconde session)
+
+- `mattpocock-skills:code-review` : aucune violation des règles, rien de faux par rapport à la spec.
+  - `0794af1` : `sourceFile()` refuse aussi un dossier (`stat().isFile()`), un test par adaptateur.
+  - `1ef36a5` : écart avec la mesure du 2026-10-24 déclaré non expliqué (ci-dessus).
+- `simplify`, `91d60a7` : liste `SUITE_TESTS` partagée par les deux configs vitest, `Case.name` retiré,
+  plus de remise à zéro de la mémoire entre les cas du test cell80, tests de source absent en `it.each`.
+  - Écartés : module partagé de lecture de la suite (attendre un troisième lecteur), résolution de commande
+    commune à RASM et FantAMS (question ouverte), règle dependency-cruiser générique (attendre un second cas).
+- PR #7 mergée par l'utilisateur (le mode auto refuse le merge), `main` mergé dans la branche, PR #8 ouverte.
+
 ## Non fait / reste
 
-- Revue avant PR de `feat/follow-ups` : `mattpocock-skills:code-review` sur `main...HEAD`, puis `simplify`.
-- Push de `feat/follow-ups` et PR.
-- Merge de la PR #7.
+- Merge de la PR #8 et CI de `main`.
 
 ## Décisions
 
@@ -41,10 +50,8 @@
 
 ## État pour reprendre
 
-- **Prochaine action :** lancer `mattpocock-skills:code-review` sur `main...HEAD` de `feat/follow-ups`, puis `simplify`.
-- **Arbre :** propre après le commit de ce rapport · `feat/follow-ups` non poussée ; PR #7 ouverte, non mergée.
+- **Prochaine action :** merger la PR #8, vérifier la CI de `main`, puis cadrer l'étape suivante.
+- **Arbre :** propre après le commit de ce rapport · `feat/follow-ups` poussée, PR #8 ouverte ; PR #7 mergée.
 - **Pièges :**
-  - Questions posées sans réponse : « revue avant PR, je lance ? » et « je merge la PR #7 ? ».
-  - La PR #7 et cette branche modifient toutes deux `docs/STATUS.md` : conflit probable au second merge ; garder la version sans la question npm.
-  - Réécrire le STATUS merge-invariant, avec le numéro de PR, au commit du rapport de fin d'étape.
+  - Le mode auto refuse `gh pr merge` : l'utilisateur merge lui-même.
   - `cell80.wasm` est reproductible (`pnpm build:wasm` ne change pas son md5) ; la CI le vérifie.
