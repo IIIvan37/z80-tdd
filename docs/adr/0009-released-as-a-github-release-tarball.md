@@ -8,3 +8,4 @@ A CPC project installs z80-tdd from the tarball attached to a GitHub release: `p
 - A release is made from `main`: `pnpm build`, then `pnpm pack`, then `gh release create vX.Y.Z` with the tarball. `pnpm pack` packs `dist/` as it is, so a stale `dist/` would ship.
 - The README's install step names one exact version; each release updates it.
 - The GitHub repository is public, so that the release URL works without authentication.
+- pnpm 10 writes the lockfile entry of the tarball without `integrity` when its store already holds that tarball (seen in `z80-tdd-sorts`); pnpm 11.9 fixes it.
