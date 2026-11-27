@@ -76,7 +76,7 @@ z80-tdd needs Node.js 24 or later and Vitest.
 
 2. Install the Assembler of the project, then put it on the PATH:
    - RASM, the default: download it from [the RASM releases](https://github.com/EdouardBERGE/rasm/releases). z80-tdd is tested with RASM v3.3.1.
-   - FantAMS: it has no release, so build it from [its repository](https://github.com/sikorama/fantams) with `make fantams`, and set `assembler: fantamsAssembler()` in the configuration file. z80-tdd is tested with FantAMS at commit `a3c76c7`.
+   - FantAMS: it has no release, so build it from [its repository](https://github.com/sikorama/fantams) with `make fantams`, and set `assembler: fantamsAssembler()` in the configuration file. z80-tdd is tested with FantAMS at commit `5b2ca65`. A FantAMS older than commit `f9303e1` opens a nested INCLUDE from another folder.
 
 3. Write `z80-tdd.config.ts` at the root of the CPC project, with at least the source file to assemble (see below):
 
@@ -111,7 +111,7 @@ export default defineConfig({
 - A test file overrides any setting: `loadProgram({ source: "src/clear.asm" })`.
 - A Run overrides the SP, the NOP limit and the Port mask: `program.run("clear_buffer", { registers: { sp: 0x8000 }, nopLimit: 500 })`.
 - z80-tdd reads the nearest `z80-tdd.config.ts` in the folder where Vitest runs or in a folder above it. That folder is the project root: `source`, and a path to `rasm` or `fantams` that holds a folder, start from there.
-- FantAMS opens every INCLUDE from the folder it runs in, so z80-tdd runs it in the folder of the source file. A source that needs FantAMS's linker, with a section without ORG or an extern symbol, fails the test, and so does a source that stores bytes in a bank.
+- FantAMS opens an INCLUDE from the folder of the file that includes it, as RASM does. z80-tdd runs it in the folder of the source file. A source that needs FantAMS's linker, with a section without ORG or an extern symbol, fails the test, and so does a source that stores bytes in a bank.
 - A setting it does not know, or a value it refuses, fails the test and names the setting.
 
 ## Running a Routine
