@@ -292,3 +292,169 @@ describe("the Stubs of a Run", () => {
     }
   });
 });
+
+const LD_A_FROM_NN = 0x3a;
+const LD_NN_FROM_A = 0x32;
+
+describe("a Stub's effect", () => {
+  it("writes memory the Routine then reads, as the code at its label would have", async () => {
+    const program = await load({
+      // call read_sector / ld a,(#5000) / ret
+      blocks: [
+        {
+          address: 0x4000,
+          bytes: [CALL_NN, 0x10, 0x40, LD_A_FROM_NN, 0x00, 0x50, RET],
+        },
+        { address: 0x4010, bytes: [RET] },
+      ],
+      symbols: { load_level: 0x4000, read_sector: 0x4010, sector: 0x5000 },
+    });
+
+    const run = program.run("load_level", {
+      stubs: [
+        {
+          at: "read_sector",
+          effect: (_call, memory) => memory.write("sector", [0x42, 0x43]),
+        },
+      ],
+    });
+
+    expect(run.registers.a).toBe(0x42);
+    expect(run.memory(0x5001)).toEqual([0x43]);
+  });
+
+  it("reads the memory and the registers as they are at the moment of the call", async () => {
+    const program = await load({
+      // ld a,7 / ld (#5000),a / call select_bank / ret
+      blocks: [
+        {
+          address: 0x4000,
+          bytes: [
+            LD_A_N,
+            0x07,
+            LD_NN_FROM_A,
+            0x00,
+            0x50,
+            CALL_NN,
+            0x10,
+            0x40,
+            RET,
+          ],
+        },
+        { address: 0x4010, bytes: [RET] },
+      ],
+      symbols: { show_bank: 0x4000, select_bank: 0x4010, window: 0x5000 },
+    });
+    const seen: unknown[] = [];
+
+    program.run("show_bank", {
+      memory: [{ at: 0x5001, bytes: [0x99] }],
+      stubs: [
+        {
+          at: "select_bank",
+          registers: { a: 0x00 },
+          effect: (call, memory) =>
+            seen.push(
+              call.at,
+              call.registers.a,
+              memory.read("window", 2),
+              memory.read(0x5001),
+            ),
+        },
+      ],
+    });
+
+    expect(seen).toEqual(["select_bank", 0x07, [0x07, 0x99], [0x99]]);
+  });
+
+  it("runs at each call, so that a test can show another bank in a window of memory", async () => {
+    const program = await load({
+      // ld a,1 / call select_bank / ld a,(#5000) / ld b,a / xor a (as ld a,0) / call select_bank / ld a,(#5000) / ret
+      blocks: [
+        {
+          address: 0x4000,
+          bytes: [
+            LD_A_N,
+            0x01,
+            CALL_NN,
+            0x20,
+            0x40,
+            LD_A_FROM_NN,
+            0x00,
+            0x50,
+            LD_B_A,
+            LD_A_N,
+            0x00,
+            CALL_NN,
+            0x20,
+            0x40,
+            LD_A_FROM_NN,
+            0x00,
+            0x50,
+            RET,
+          ],
+        },
+        { address: 0x4020, bytes: [RET] },
+      ],
+      symbols: { read_banks: 0x4000, select_bank: 0x4020 },
+    });
+    const banks = [[0xaa], [0xbb]];
+
+    const run = program.run("read_banks", {
+      stubs: [
+        {
+          at: "select_bank",
+          effect: (call, memory) =>
+            memory.write(0x5000, banks[call.registers.a] ?? []),
+        },
+      ],
+    });
+
+    expect(run.registers.b).toBe(0xbb);
+    expect(run.registers.a).toBe(0xaa);
+  });
+
+  it("counts the bytes it changes among the Memory changes", async () => {
+    const program = await load({
+      blocks: [
+        { address: 0x4000, bytes: [CALL_NN, 0x10, 0x40, RET] },
+        { address: 0x4010, bytes: [RET] },
+      ],
+      symbols: { load_level: 0x4000, read_sector: 0x4010 },
+    });
+
+    const run = program.run("load_level", {
+      stubs: [
+        {
+          at: "read_sector",
+          effect: (_call, memory) => memory.write(0xffff, [0x01, 0x02]),
+        },
+      ],
+    });
+
+    // A write past #FFFF goes on at #0000, as a read does.
+    expect(run.memoryChanges).toEqual([
+      { address: 0x0000, before: 0x00, after: 0x02 },
+      { address: 0xffff, before: 0x00, after: 0x01 },
+    ]);
+  });
+
+  it("fails the Run on a value that is not a byte, naming the Stub and the address", async () => {
+    const program = await loadPlaySound();
+
+    for (const byte of [-1, 0x100, 0.5]) {
+      expect(() =>
+        program.run("play_sound", {
+          stubs: [
+            {
+              at: "play_sound",
+              effect: (_call, memory) => memory.write(0x5000, [0x00, byte]),
+            },
+          ],
+        }),
+      ).toThrow(
+        `The Stub at play_sound cannot write ${byte} at #5001: a byte takes 0 to 255`,
+      );
+    }
+  });
+});

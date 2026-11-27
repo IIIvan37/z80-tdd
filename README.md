@@ -173,6 +173,26 @@ expect(run.stubCalls).toMatchObject([{ at: "play_sound", registers: { a: 3 } }])
 
 A call to a Stub costs 3 NOPs, the price of a `RET`, on top of the `CALL` the Routine paid; `nops` sets another duration. A Stub cannot set SP or PC, which its return sets. A failure report shows each call to a Stub as a `Stub` line among the last instructions.
 
+A Stub's `effect` does to memory what the code at the Stub would have done. It runs at each call, after the call is recorded and before the Stub returns. It receives the call, as `stubCalls` records it, and the memory of the Run, which it reads and writes at a label or an address. The bytes it changes count among the Memory changes.
+
+```ts
+// the routine that selects a RAM bank: the test keeps each bank, and shows the selected one at #4000
+const banks = new Map<number, readonly number[]>();
+let shown = 0xc0;
+program.run("copy_line", {
+  stubs: [
+    {
+      at: "select_bank",
+      effect: ({ registers }, memory) => {
+        banks.set(shown, memory.read(0x4000, 0x4000));
+        shown = registers.a;
+        memory.write(0x4000, banks.get(shown) ?? []);
+      },
+    },
+  ],
+});
+```
+
 Two Matchers check Memory changes: `toChangeOnly(program.range(label, length))` and `toLeaveMemoryUnchanged()`. A third, `toHaveRegisters({ a: 0x2a, hl: 0xc000 })`, checks the registers it names and prints the ones that differ in CPC hexadecimal. Install them with `expect.extend(runMatchers)`.
 
 ## When a Run fails
@@ -216,7 +236,7 @@ A NOP is the CPC unit of time: one microsecond. The CPC stretches each memory ac
 
 ## Limits
 
-- `loadProgram()` loads the Program in 64 KB of RAM: no ROM, no firmware, no memory banking, no video. Replace a firmware call with a Stub.
+- `loadProgram()` loads the Program in 64 KB of RAM: no ROM, no firmware, no memory banking, no video. Replace a firmware call with a Stub, and show a RAM bank with a Stub's `effect`.
 - The Run executes no interrupt. A Routine that waits for one, such as a `HALT`, reaches its NOP limit.
 - Port writes stay raw, as a port address and a value. z80-tdd does not decode them into CRTC registers or Gate Array commands.
 - RASM and FantAMS are the only Assemblers. A test file is TypeScript run by Vitest: there is no standalone runner and no code coverage of Routines.

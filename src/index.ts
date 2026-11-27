@@ -29,5 +29,7 @@ export type {
   StartRegisters,
   Stub,
   StubCall,
+  StubEffect,
+  StubMemory,
   StubRegisters,
 } from "./run.ts";

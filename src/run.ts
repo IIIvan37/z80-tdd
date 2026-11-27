@@ -60,6 +60,19 @@ export interface Stub {
   readonly flags?: Partial<Flags>;
   /** What a call to the Stub costs, in NOPs, on top of the `CALL`; 3, the cost of a `RET`, by default. */
   readonly nops?: number;
+  /** What the code at `at` would have done to memory: runs at each call, before the Stub returns. */
+  readonly effect?: StubEffect;
+}
+
+/** Reads and writes the memory of the Run on a call to a Stub, which it receives as `stubCalls` records it. */
+export type StubEffect = (call: StubCall, memory: StubMemory) => void;
+
+/** The memory of the Run at the moment of a call to a Stub. */
+export interface StubMemory {
+  /** The `length` bytes at a label or an address; 1 by default. */
+  read(at: LabelOrAddress, length?: number): readonly number[];
+  /** Writes `bytes` at a label or an address; the bytes it changes count among the Memory changes. */
+  write(at: LabelOrAddress, bytes: readonly number[]): void;
 }
 
 /** The registers a Stub may set: all but SP and PC, which its return sets. */
@@ -234,13 +247,20 @@ export function run(
     ),
     portWrites: Object.freeze(ports.writes),
     stubCalls: Object.freeze(stubs.calls),
-    memory: (at: LabelOrAddress, length = 1) => {
-      const address = toAddress(at);
-      return Object.freeze(
-        Array.from({ length }, (_, i) => final[(address + i) & 0xffff] ?? 0),
-      );
-    },
+    memory: (at: LabelOrAddress, length = 1) =>
+      bytesAt(final, toAddress(at), length),
   });
+}
+
+/** The `length` bytes of `memory` from `address`, which go on at #0000 past #FFFF. */
+function bytesAt(
+  memory: Uint8Array,
+  address: number,
+  length: number,
+): readonly number[] {
+  return Object.freeze(
+    Array.from({ length }, (_, i) => memory[(address + i) & 0xffff] ?? 0),
+  );
 }
 
 /** The stack the Routine used, which Memory changes leave out (ADR 0005). */
@@ -409,7 +429,7 @@ class Stubs {
   /** Fails on a Stub at no address, with registers `checkRegisters` refuses, a cost that is not a NOP count, or at another's address. */
   constructor(
     declared: readonly Stub[],
-    toAddress: (at: LabelOrAddress) => number,
+    private readonly toAddress: (at: LabelOrAddress) => number,
   ) {
     for (const stub of declared) {
       const { nops, ...placed } = stub;
@@ -447,12 +467,29 @@ class Stubs {
     return this.byAddress.get(pc);
   }
 
-  /** Records the call, then returns as a `RET` would, with the Stub's registers and flags. */
+  /** Records the call, runs the Stub's effect, then returns as a `RET` would, with the Stub's registers and flags. */
   call(cpu: Cpu, before: Registers, stub: CostedStub): void {
-    this.made.push(
-      Object.freeze({ at: stub.at, registers: Object.freeze(before) }),
-    );
+    const call = Object.freeze({
+      at: stub.at,
+      registers: Object.freeze(before),
+    });
+    this.made.push(call);
     const { memory } = cpu;
+    stub.effect?.(call, {
+      read: (at, length = 1) => bytesAt(memory, this.toAddress(at), length),
+      write: (at, bytes) => {
+        const start = this.toAddress(at);
+        for (const [i, byte] of bytes.entries()) {
+          const address = (start + i) & 0xffff;
+          if (!isByte(byte)) {
+            throw new Error(
+              `The Stub at ${nameOf(stub.at)} cannot write ${byte} at ${hex(address)}: a byte takes ${BYTE_TAKES}`,
+            );
+          }
+          memory[address] = byte;
+        }
+      },
+    });
     const returnAddress =
       (memory[before.sp] ?? 0) | ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
     setState(
