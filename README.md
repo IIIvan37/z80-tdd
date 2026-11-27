@@ -173,7 +173,7 @@ expect(run.stubCalls).toMatchObject([{ at: "play_sound", registers: { a: 3 } }])
 
 A call to a Stub costs 3 NOPs, the price of a `RET`, on top of the `CALL` the Routine paid; `nops` sets another duration. A Stub cannot set SP or PC, which its return sets. A failure report shows each call to a Stub as a `Stub` line among the last instructions.
 
-A Stub's `effect` does to memory what the code at the Stub would have done. It runs at each call, after the call is recorded and before the Stub returns. It receives the call, as `stubCalls` records it, and the memory of the Run, which it reads and writes at a label or an address. The bytes it changes count among the Memory changes.
+A Stub's `effect` does to memory what the code at the Stub would have done. It runs at each call, after the call is recorded and before the Stub returns. It receives the call, as `stubCalls` records it, and the memory of the Run, which it reads and writes at a label or an address.
 
 ```ts
 // the routine that selects a RAM bank: the test keeps each bank, and shows the selected one at #4000
@@ -186,12 +186,17 @@ program.run("copy_line", {
       effect: ({ registers }, memory) => {
         banks.set(shown, memory.read(0x4000, 0x4000));
         shown = registers.a;
-        memory.write(0x4000, banks.get(shown) ?? []);
+        // a bank the Routine has not shown yet holds zeros
+        memory.write(0x4000, banks.get(shown) ?? new Array(0x4000).fill(0));
       },
     },
   ],
 });
 ```
+
+The bytes an `effect` changes count among the Memory changes. The Memory changes compare the memory before the Run with the memory after it. Thus they do not show a byte written in a bank that the window no longer shows at the end. They also leave out a byte the `effect` writes in the stack the Routine used.
+
+A Stub returns to its caller whatever its `effect` writes on the stack. An `effect` cannot write over the return address of the Routine. If an `effect` throws, the Run fails with the name of the Stub and the failure report.
 
 Two Matchers check Memory changes: `toChangeOnly(program.range(label, length))` and `toLeaveMemoryUnchanged()`. A third, `toHaveRegisters({ a: 0x2a, hl: 0xc000 })`, checks the registers it names and prints the ones that differ in CPC hexadecimal. Install them with `expect.extend(runMatchers)`.
 

@@ -9,6 +9,8 @@ import {
 const LD_A_N = 0x3e;
 const LD_B_N = 0x06;
 const LD_B_A = 0x47;
+const LD_A_FROM_NN = 0x3a;
+const LD_NN_FROM_A = 0x32;
 const CALL_NN = 0xcd;
 const JP_NN = 0xc3;
 const HALT = 0x76;
@@ -293,9 +295,6 @@ describe("the Stubs of a Run", () => {
   });
 });
 
-const LD_A_FROM_NN = 0x3a;
-const LD_NN_FROM_A = 0x32;
-
 describe("a Stub's effect", () => {
   it("writes memory the Routine then reads, as the code at its label would have", async () => {
     const program = await load({
@@ -369,7 +368,7 @@ describe("a Stub's effect", () => {
 
   it("runs at each call, so that a test can show another bank in a window of memory", async () => {
     const program = await load({
-      // ld a,1 / call select_bank / ld a,(#5000) / ld b,a / xor a (as ld a,0) / call select_bank / ld a,(#5000) / ret
+      // ld a,1 / call select_bank / ld a,(#5000) / ld b,a / ld a,0 / call select_bank / ld a,(#5000) / ret
       blocks: [
         {
           address: 0x4000,
@@ -415,28 +414,133 @@ describe("a Stub's effect", () => {
   });
 
   it("counts the bytes it changes among the Memory changes", async () => {
-    const program = await load({
-      blocks: [
-        { address: 0x4000, bytes: [CALL_NN, 0x10, 0x40, RET] },
-        { address: 0x4010, bytes: [RET] },
-      ],
-      symbols: { load_level: 0x4000, read_sector: 0x4010 },
-    });
+    const program = await loadPlaySound();
 
-    const run = program.run("load_level", {
+    const run = program.run("play_sound", {
       stubs: [
         {
-          at: "read_sector",
-          effect: (_call, memory) => memory.write(0xffff, [0x01, 0x02]),
+          at: "play_sound",
+          effect: (_call, memory) => memory.write(0x5000, [0x01, 0x00]),
         },
       ],
     });
 
-    // A write past #FFFF goes on at #0000, as a read does.
     expect(run.memoryChanges).toEqual([
-      { address: 0x0000, before: 0x00, after: 0x02 },
-      { address: 0xffff, before: 0x00, after: 0x01 },
+      { address: 0x5000, before: 0x00, after: 0x01 },
     ]);
+  });
+
+  it("reads and writes past #FFFF on at #0000", async () => {
+    const program = await loadPlaySound();
+    let read: readonly number[] = [];
+
+    const run = program.run("play_sound", {
+      stubs: [
+        {
+          at: "play_sound",
+          effect: (_call, memory) => {
+            memory.write(0xffff, [0x01, 0x02]);
+            read = memory.read(0xffff, 2);
+          },
+        },
+      ],
+    });
+
+    expect(read).toEqual([0x01, 0x02]);
+    expect(run.memory(0x0000)).toEqual([0x02]);
+  });
+
+  it("shows each RAM bank the Routine selects in a window of 16 KB, and reports the window's changes from the first bank to the last", async () => {
+    const program = await load({
+      // ld a,#C4 / call select_bank / ld a,#11 / ld (#4000),a
+      // ld a,#C5 / call select_bank / ld a,#22 / ld (#7FFF),a
+      // ld a,#C4 / call select_bank / ld a,(#4000) / ld b,a
+      // ld a,#C5 / call select_bank / ld a,(#7FFF) / ret
+      blocks: [
+        {
+          address: 0x8000,
+          bytes: [
+            ...[LD_A_N, 0xc4, CALL_NN, 0x40, 0x80],
+            ...[LD_A_N, 0x11, LD_NN_FROM_A, 0x00, 0x40],
+            ...[LD_A_N, 0xc5, CALL_NN, 0x40, 0x80],
+            ...[LD_A_N, 0x22, LD_NN_FROM_A, 0xff, 0x7f],
+            ...[LD_A_N, 0xc4, CALL_NN, 0x40, 0x80],
+            ...[LD_A_FROM_NN, 0x00, 0x40, LD_B_A],
+            ...[LD_A_N, 0xc5, CALL_NN, 0x40, 0x80],
+            ...[LD_A_FROM_NN, 0xff, 0x7f, RET],
+          ],
+        },
+        { address: 0x8040, bytes: [RET] },
+      ],
+      symbols: { fill_banks: 0x8000, select_bank: 0x8040, window: 0x4000 },
+    });
+    const WINDOW_LENGTH = 0x4000;
+    const banks = new Map<number, readonly number[]>();
+    let shown = 0xc0;
+
+    const run = program.run("fill_banks", {
+      stubs: [
+        {
+          at: "select_bank",
+          effect: ({ registers }, memory) => {
+            banks.set(shown, memory.read("window", WINDOW_LENGTH));
+            shown = registers.a;
+            memory.write(
+              "window",
+              banks.get(shown) ?? new Array<number>(WINDOW_LENGTH).fill(0),
+            );
+          },
+        },
+      ],
+    });
+
+    expect(run.registers.b).toBe(0x11);
+    expect(run.registers.a).toBe(0x22);
+    expect(run.stubCalls).toHaveLength(4);
+    // Bank #C4 is no longer in the window, so its byte at #4000 is no Memory change.
+    expect(run.memoryChanges).toEqual([
+      { address: 0x7fff, before: 0x00, after: 0x22 },
+    ]);
+  });
+
+  it("returns to the caller whatever it writes on the stack", async () => {
+    const program = await load({
+      blocks: [
+        { address: 0x4000, bytes: [CALL_NN, 0x10, 0x40, LD_A_N, 0x01, RET] },
+        { address: 0x4010, bytes: [RET] },
+      ],
+      symbols: { game_loop: 0x4000, play_sound: 0x4010 },
+    });
+
+    const run = program.run("game_loop", {
+      stubs: [
+        {
+          at: "play_sound",
+          effect: ({ registers }, memory) =>
+            memory.write(registers.sp, [0x00, 0x00]),
+        },
+      ],
+    });
+
+    expect(run.registers.a).toBe(0x01);
+  });
+
+  it("fails the Run on a write over the return address of the Routine", async () => {
+    const program = await loadPlaySound();
+
+    expect(() =>
+      program.run("play_sound", {
+        registers: { sp: 0xc000 },
+        stubs: [
+          {
+            at: "play_sound",
+            effect: (_call, memory) => memory.write(0xbffd, [0x00, 0x00]),
+          },
+        ],
+      }),
+    ).toThrow(
+      "The effect of the Stub at play_sound failed: The bytes written at #BFFD would overwrite the return address pushed at #BFFE; set another SP",
+    );
   });
 
   it("fails the Run on a value that is not a byte, naming the Stub and the address", async () => {
@@ -453,8 +557,45 @@ describe("a Stub's effect", () => {
           ],
         }),
       ).toThrow(
-        `The Stub at play_sound cannot write ${byte} at #5001: a byte takes 0 to 255`,
+        `The effect of the Stub at play_sound failed: The byte at #5001 cannot be ${byte}: it takes 0 to 255`,
       );
     }
+  });
+
+  it("fails the Run with its failure report when the effect throws, and keeps the cause", async () => {
+    const program = await loadPlaySound();
+    const cause = new Error("no such sector");
+
+    const failed = () =>
+      program.run("play_sound", {
+        stubs: [
+          {
+            at: "play_sound",
+            effect: () => {
+              throw cause;
+            },
+          },
+        ],
+      });
+
+    expect(failed).toThrow(
+      "The effect of the Stub at play_sound failed: no such sector\n\nLast 1 instructions executed:\n  #4010  play_sound  Stub",
+    );
+    expect(failed).toThrow(expect.objectContaining({ cause }));
+  });
+
+  it("fails the Run on a label the Program does not have, naming the Stub", async () => {
+    const program = await loadPlaySound();
+
+    expect(() =>
+      program.run("play_sound", {
+        stubs: [
+          {
+            at: "play_sound",
+            effect: (_call, memory) => memory.read("no_such_label"),
+          },
+        ],
+      }),
+    ).toThrow(/^The effect of the Stub at play_sound failed: .*no_such_label/);
   });
 });

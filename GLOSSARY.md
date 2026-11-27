@@ -45,8 +45,12 @@ The longest a **Run** may last before the tool stops it and fails the test.
 _Avoid_: Cycle budget, timeout
 
 **Stub**:
-A label or address the test declares so that a **Routine** calling it returns at once, with outputs the test chooses, and each call is recorded. Its effect is what the test makes it do to memory at each call, in place of the code it stands for.
+A label or address the test declares so that a **Routine** calling it returns at once, with outputs the test chooses, and each call is recorded.
 _Avoid_: Mock, fake
+
+**Stub effect**:
+What the test makes a **Stub** do to memory at each call, in place of the code the Stub stands for.
+_Avoid_: Side effect, callback, handler
 
 **Port write**:
 A value the **Routine** sends to an I/O port with `OUT`, recorded so a test can check it.

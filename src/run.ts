@@ -60,7 +60,7 @@ export interface Stub {
   readonly flags?: Partial<Flags>;
   /** What a call to the Stub costs, in NOPs, on top of the `CALL`; 3, the cost of a `RET`, by default. */
   readonly nops?: number;
-  /** What the code at `at` would have done to memory: runs at each call, before the Stub returns. */
+  /** What the code at `at` would have done to memory: runs at each call, before the Stub returns to its caller. */
   readonly effect?: StubEffect;
 }
 
@@ -71,7 +71,7 @@ export type StubEffect = (call: StubCall, memory: StubMemory) => void;
 export interface StubMemory {
   /** The `length` bytes at a label or an address; 1 by default. */
   read(at: LabelOrAddress, length?: number): readonly number[];
-  /** Writes `bytes` at a label or an address; the bytes it changes count among the Memory changes. */
+  /** Writes `bytes` at a label or an address; fails on a value that is not a byte, or on the return address of the Routine. */
   write(at: LabelOrAddress, bytes: readonly number[]): void;
 }
 
@@ -181,7 +181,14 @@ export function run(
   const callerSp = options.registers?.sp ?? loaded.sp;
   const sp = (callerSp - 2) & 0xffff;
   const returnAddressAt = pushSentinel(memory, loaded, sp);
-  writeTestBytes(memory, options.memory ?? [], toAddress, returnAddressAt);
+  for (const { at, bytes } of options.memory ?? []) {
+    writeBytes(memory, toAddress(at), bytes, returnAddressAt);
+  }
+  const stubMemory: StubMemory = {
+    read: (at, length = 1) => bytesAt(memory, toAddress(at), length),
+    write: (at, bytes) =>
+      writeBytes(memory, toAddress(at), bytes, returnAddressAt),
+  };
   setState(cpu, { ...options.registers, sp, pc: entry }, options.flags);
 
   const initial = memory.slice();
@@ -216,7 +223,14 @@ export function run(
     stack.reach(before.sp);
     if (stub !== undefined) {
       history.recordStub(before.pc);
-      stubs.call(cpu, before, stub);
+      try {
+        stubs.call(cpu, before, stub, stubMemory);
+      } catch (error) {
+        if (error instanceof EffectFailure) {
+          throw failure(error.message, before, error.cause);
+        }
+        throw error;
+      }
       continue;
     }
     // Halted, PC is already past the HALT, and the CPU executes no instruction of the Routine.
@@ -429,7 +443,7 @@ class Stubs {
   /** Fails on a Stub at no address, with registers `checkRegisters` refuses, a cost that is not a NOP count, or at another's address. */
   constructor(
     declared: readonly Stub[],
-    private readonly toAddress: (at: LabelOrAddress) => number,
+    toAddress: (at: LabelOrAddress) => number,
   ) {
     for (const stub of declared) {
       const { nops, ...placed } = stub;
@@ -467,36 +481,44 @@ class Stubs {
     return this.byAddress.get(pc);
   }
 
-  /** Records the call, runs the Stub's effect, then returns as a `RET` would, with the Stub's registers and flags. */
-  call(cpu: Cpu, before: Registers, stub: CostedStub): void {
+  /** Records the call, runs the Stub's effect on `memory`, then returns as a `RET` would, with the Stub's registers and flags. */
+  call(
+    cpu: Cpu,
+    before: Registers,
+    stub: CostedStub,
+    memory: StubMemory,
+  ): void {
     const call = Object.freeze({
       at: stub.at,
       registers: Object.freeze(before),
     });
     this.made.push(call);
-    const { memory } = cpu;
-    stub.effect?.(call, {
-      read: (at, length = 1) => bytesAt(memory, this.toAddress(at), length),
-      write: (at, bytes) => {
-        const start = this.toAddress(at);
-        for (const [i, byte] of bytes.entries()) {
-          const address = (start + i) & 0xffff;
-          if (!isByte(byte)) {
-            throw new Error(
-              `The Stub at ${nameOf(stub.at)} cannot write ${byte} at ${hex(address)}: a byte takes ${BYTE_TAKES}`,
-            );
-          }
-          memory[address] = byte;
-        }
-      },
-    });
-    const returnAddress =
-      (memory[before.sp] ?? 0) | ((memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
+    // Read before the effect: the Stub returns to its caller whatever the effect writes on the stack.
+    const [low = 0, high = 0] = memory.read(before.sp, 2);
+    try {
+      stub.effect?.(call, memory);
+    } catch (cause) {
+      throw new EffectFailure(stub.at, cause);
+    }
     setState(
       cpu,
-      { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
+      {
+        ...stub.registers,
+        pc: low | (high << 8),
+        sp: (before.sp + 2) & 0xffff,
+      },
       stub.flags,
     );
+  }
+}
+
+/** A Stub's effect that threw, for the Run to fail on with its failure report. */
+class EffectFailure extends Error {
+  constructor(at: LabelOrAddress, cause: unknown) {
+    const message = cause instanceof Error ? cause.message : cause;
+    super(`The effect of the Stub at ${nameOf(at)} failed: ${message}`, {
+      cause,
+    });
   }
 }
 
@@ -629,29 +651,26 @@ function pushSentinel(
   return returnAddressAt;
 }
 
-/** Writes the test's bytes before the Run; fails on a value that is not a byte, or on the return address. */
-function writeTestBytes(
+/** Writes `bytes` from `start`, on at #0000 past #FFFF; fails on a value that is not a byte, or on the return address. */
+function writeBytes(
   memory: Uint8Array,
-  writes: readonly MemoryWrite[],
-  toAddress: (at: LabelOrAddress) => number,
+  start: number,
+  bytes: readonly number[],
   returnAddressAt: readonly [number, number],
 ): void {
-  for (const { at, bytes } of writes) {
-    const start = toAddress(at);
-    for (const [i, byte] of bytes.entries()) {
-      const address = (start + i) & 0xffff;
-      if (!isByte(byte)) {
-        throw new Error(
-          `The byte at ${hex(address)} cannot be ${byte}: it takes ${BYTE_TAKES}`,
-        );
-      }
-      if (returnAddressAt.includes(address)) {
-        throw new Error(
-          `The bytes written at ${hex(start)} would overwrite the return address pushed at ${hex(returnAddressAt[0])}; set another SP`,
-        );
-      }
-      memory[address] = byte;
+  for (const [i, byte] of bytes.entries()) {
+    const address = (start + i) & 0xffff;
+    if (!isByte(byte)) {
+      throw new Error(
+        `The byte at ${hex(address)} cannot be ${byte}: it takes ${BYTE_TAKES}`,
+      );
     }
+    if (returnAddressAt.includes(address)) {
+      throw new Error(
+        `The bytes written at ${hex(start)} would overwrite the return address pushed at ${hex(returnAddressAt[0])}; set another SP`,
+      );
+    }
+    memory[address] = byte;
   }
 }
 
