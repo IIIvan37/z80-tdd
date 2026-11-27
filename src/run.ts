@@ -60,7 +60,7 @@ export interface Stub {
   readonly flags?: Partial<Flags>;
   /** What a call to the Stub costs, in NOPs, on top of the `CALL`; 3, the cost of a `RET`, by default. */
   readonly nops?: number;
-  /** What the code at `at` would have done to memory: runs at each call, before the Stub returns to its caller. */
+  /** What the code at `at` would have done to memory: runs at each call, before the Stub returns to its caller, whatever it writes on the stack. */
   readonly effect?: StubEffect;
 }
 
@@ -223,13 +223,13 @@ export function run(
     stack.reach(before.sp);
     if (stub !== undefined) {
       history.recordStub(before.pc);
-      try {
-        stubs.call(cpu, before, stub, stubMemory);
-      } catch (error) {
-        if (error instanceof EffectFailure) {
-          throw failure(error.message, before, error.cause);
-        }
-        throw error;
+      const failed = stubs.call(cpu, before, stub, stubMemory);
+      if (failed !== undefined) {
+        throw failure(
+          `The effect of the Stub at ${nameOf(stub.at)} failed: ${messageOf(failed.cause)}`,
+          before,
+          failed.cause,
+        );
       }
       continue;
     }
@@ -272,9 +272,17 @@ function bytesAt(
   address: number,
   length: number,
 ): readonly number[] {
-  return Object.freeze(
-    Array.from({ length }, (_, i) => memory[(address + i) & 0xffff] ?? 0),
-  );
+  // An indexed loop: a Stub effect may read 16 KB at each call.
+  const bytes = new Array<number>(length);
+  for (let i = 0; i < length; i++) {
+    bytes[i] = memory[(address + i) & 0xffff] ?? 0;
+  }
+  return Object.freeze(bytes);
+}
+
+/** The text of what a function of the test threw. */
+function messageOf(cause: unknown): unknown {
+  return cause instanceof Error ? cause.message : cause;
 }
 
 /** The stack the Routine used, which Memory changes leave out (ADR 0005). */
@@ -382,11 +390,10 @@ class SuppliedPorts implements Ports {
     try {
       value = compute({ address, writes: this.snapshot });
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : cause;
       throw new PortRefusal(
         address,
         key,
-        `whose function failed: ${message}`,
+        `whose function failed: ${messageOf(cause)}`,
         cause,
       );
     }
@@ -481,44 +488,33 @@ class Stubs {
     return this.byAddress.get(pc);
   }
 
-  /** Records the call, runs the Stub's effect on `memory`, then returns as a `RET` would, with the Stub's registers and flags. */
+  /** Records the call, runs the Stub's effect on `memory`, then returns as a `RET` would, with the Stub's registers and flags; gives what the effect threw, if it did. */
   call(
     cpu: Cpu,
     before: Registers,
     stub: CostedStub,
     memory: StubMemory,
-  ): void {
+  ): { readonly cause: unknown } | undefined {
     const call = Object.freeze({
       at: stub.at,
       registers: Object.freeze(before),
     });
     this.made.push(call);
     // Read before the effect: the Stub returns to its caller whatever the effect writes on the stack.
-    const [low = 0, high = 0] = memory.read(before.sp, 2);
+    const returnAddress =
+      (cpu.memory[before.sp] ?? 0) |
+      ((cpu.memory[(before.sp + 1) & 0xffff] ?? 0) << 8);
     try {
       stub.effect?.(call, memory);
     } catch (cause) {
-      throw new EffectFailure(stub.at, cause);
+      return { cause };
     }
     setState(
       cpu,
-      {
-        ...stub.registers,
-        pc: low | (high << 8),
-        sp: (before.sp + 2) & 0xffff,
-      },
+      { ...stub.registers, pc: returnAddress, sp: (before.sp + 2) & 0xffff },
       stub.flags,
     );
-  }
-}
-
-/** A Stub's effect that threw, for the Run to fail on with its failure report. */
-class EffectFailure extends Error {
-  constructor(at: LabelOrAddress, cause: unknown) {
-    const message = cause instanceof Error ? cause.message : cause;
-    super(`The effect of the Stub at ${nameOf(at)} failed: ${message}`, {
-      cause,
-    });
+    return undefined;
   }
 }
 

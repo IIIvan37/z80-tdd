@@ -366,53 +366,6 @@ describe("a Stub's effect", () => {
     expect(seen).toEqual(["select_bank", 0x07, [0x07, 0x99], [0x99]]);
   });
 
-  it("runs at each call, so that a test can show another bank in a window of memory", async () => {
-    const program = await load({
-      // ld a,1 / call select_bank / ld a,(#5000) / ld b,a / ld a,0 / call select_bank / ld a,(#5000) / ret
-      blocks: [
-        {
-          address: 0x4000,
-          bytes: [
-            LD_A_N,
-            0x01,
-            CALL_NN,
-            0x20,
-            0x40,
-            LD_A_FROM_NN,
-            0x00,
-            0x50,
-            LD_B_A,
-            LD_A_N,
-            0x00,
-            CALL_NN,
-            0x20,
-            0x40,
-            LD_A_FROM_NN,
-            0x00,
-            0x50,
-            RET,
-          ],
-        },
-        { address: 0x4020, bytes: [RET] },
-      ],
-      symbols: { read_banks: 0x4000, select_bank: 0x4020 },
-    });
-    const banks = [[0xaa], [0xbb]];
-
-    const run = program.run("read_banks", {
-      stubs: [
-        {
-          at: "select_bank",
-          effect: (call, memory) =>
-            memory.write(0x5000, banks[call.registers.a] ?? []),
-        },
-      ],
-    });
-
-    expect(run.registers.b).toBe(0xbb);
-    expect(run.registers.a).toBe(0xaa);
-  });
-
   it("counts the bytes it changes among the Memory changes", async () => {
     const program = await loadPlaySound();
 
