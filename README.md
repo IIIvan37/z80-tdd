@@ -76,7 +76,7 @@ z80-tdd needs Node.js 24 or later and Vitest.
 
 2. Install the Assembler of the project, then put it on the PATH:
    - RASM, the default: download it from [the RASM releases](https://github.com/EdouardBERGE/rasm/releases). z80-tdd is tested with RASM v3.3.1.
-   - FantAMS: it has no release, so build it from [its repository](https://github.com/sikorama/fantams) with `make fantams`, and set `assembler: fantamsAssembler()` in the configuration file. z80-tdd is tested with FantAMS at commit `a3c76c7`.
+   - FantAMS: it has no release, so build it from [its repository](https://github.com/sikorama/fantams) with `make fantams`, and set `assembler: fantamsAssembler()` in the configuration file. z80-tdd is tested with FantAMS at commit `5b2ca65`. A FantAMS older than commit `f9303e1` opens a nested INCLUDE from another folder.
 
 3. Write `z80-tdd.config.ts` at the root of the CPC project, with at least the source file to assemble (see below):
 
@@ -111,7 +111,7 @@ export default defineConfig({
 - A test file overrides any setting: `loadProgram({ source: "src/clear.asm" })`.
 - A Run overrides the SP, the NOP limit and the Port mask: `program.run("clear_buffer", { registers: { sp: 0x8000 }, nopLimit: 500 })`.
 - z80-tdd reads the nearest `z80-tdd.config.ts` in the folder where Vitest runs or in a folder above it. That folder is the project root: `source`, and a path to `rasm` or `fantams` that holds a folder, start from there.
-- FantAMS opens every INCLUDE from the folder it runs in, so z80-tdd runs it in the folder of the source file. A source that needs FantAMS's linker, with a section without ORG or an extern symbol, fails the test, and so does a source that stores bytes in a bank.
+- FantAMS opens an INCLUDE from the folder of the file that includes it, as RASM does. z80-tdd runs it in the folder of the source file. A source that needs FantAMS's linker, with a section without ORG or an extern symbol, fails the test, and so does a source that stores bytes in a bank.
 - A setting it does not know, or a value it refuses, fails the test and names the setting.
 
 ## Running a Routine
@@ -173,6 +173,31 @@ expect(run.stubCalls).toMatchObject([{ at: "play_sound", registers: { a: 3 } }])
 
 A call to a Stub costs 3 NOPs, the price of a `RET`, on top of the `CALL` the Routine paid; `nops` sets another duration. A Stub cannot set SP or PC, which its return sets. A failure report shows each call to a Stub as a `Stub` line among the last instructions.
 
+A Stub's `effect` does to memory what the code at the Stub would have done. It runs at each call, after the call is recorded and before the Stub returns. It receives the call, as `stubCalls` records it, and the memory of the Run, which it reads and writes at a label or an address.
+
+```ts
+// the routine that selects a RAM bank: the test keeps each bank, and shows the selected one at #4000
+const banks = new Map<number, readonly number[]>();
+let shown = 0xc0;
+program.run("copy_line", {
+  stubs: [
+    {
+      at: "select_bank",
+      effect: ({ registers }, memory) => {
+        banks.set(shown, memory.read(0x4000, 0x4000));
+        shown = registers.a;
+        // a bank the Routine has not shown yet holds zeros
+        memory.write(0x4000, banks.get(shown) ?? new Array(0x4000).fill(0));
+      },
+    },
+  ],
+});
+```
+
+The bytes an `effect` changes count among the Memory changes. The Memory changes compare the memory before the Run with the memory after it. Thus they do not show a byte written in a bank that the window no longer shows at the end. They also leave out a byte the `effect` writes in the stack the Routine used.
+
+A Stub returns to its caller whatever its `effect` writes on the stack. An `effect` cannot write over the return address of the Routine. If an `effect` throws, the Run fails with the name of the Stub and the failure report.
+
 Two Matchers check Memory changes: `toChangeOnly(program.range(label, length))` and `toLeaveMemoryUnchanged()`. A third, `toHaveRegisters({ a: 0x2a, hl: 0xc000 })`, checks the registers it names and prints the ones that differ in CPC hexadecimal. Install them with `expect.extend(runMatchers)`.
 
 ## When a Run fails
@@ -216,7 +241,7 @@ A NOP is the CPC unit of time: one microsecond. The CPC stretches each memory ac
 
 ## Limits
 
-- `loadProgram()` loads the Program in 64 KB of RAM: no ROM, no firmware, no memory banking, no video. Replace a firmware call with a Stub.
+- `loadProgram()` loads the Program in 64 KB of RAM: no ROM, no firmware, no memory banking, no video. Replace a firmware call with a Stub, and show a RAM bank with a Stub's `effect`.
 - The Run executes no interrupt. A Routine that waits for one, such as a `HALT`, reaches its NOP limit.
 - Port writes stay raw, as a port address and a value. z80-tdd does not decode them into CRTC registers or Gate Array commands.
 - RASM and FantAMS are the only Assemblers. A test file is TypeScript run by Vitest: there is no standalone runner and no code coverage of Routines.

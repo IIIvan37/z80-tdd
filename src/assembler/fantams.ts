@@ -52,7 +52,7 @@ export function fantamsAssembler({
       const dir = await mkdtemp(join(tmpdir(), "z80-tdd-fantams-"));
       try {
         const object = join(dir, "program.fo");
-        // FantAMS opens every INCLUDE from the folder it runs in.
+        // FantAMS before its commit f9303e1 opened every INCLUDE from the folder it runs in.
         await execFileAsync(command, [file, "-o", object], {
           cwd: dirname(file),
         }).catch((error: FantamsError) => {

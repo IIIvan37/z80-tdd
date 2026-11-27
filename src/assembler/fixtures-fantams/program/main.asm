@@ -1,4 +1,4 @@
-; Run from this folder, FantAMS opens every INCLUDE from here, even a nested one.
+; FantAMS opens each INCLUDE from the folder of the file that includes it.
  org #4000
 start:
  call clear

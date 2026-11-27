@@ -65,7 +65,7 @@ describe("the FantAMS Assembler, with the real fantams", () => {
     ]);
   });
 
-  it("opens each INCLUDE from the source file's folder, even a nested one", async () => {
+  it("opens each INCLUDE from the folder of the file that includes it", async () => {
     const assembly = await fantamsAssembler().assemble(
       "program/main.asm",
       FIXTURES,
